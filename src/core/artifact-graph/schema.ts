@@ -1,6 +1,12 @@
 import * as fs from 'node:fs';
 import { parse as parseYaml } from 'yaml';
-import { SchemaYamlSchema, type SchemaYaml, type Artifact } from './types.js';
+import {
+  SchemaYamlSchema,
+  ChangeValidationSchema,
+  SpecValidationSchema,
+  type SchemaYaml,
+  type Artifact,
+} from './types.js';
 
 export class SchemaValidationError extends Error {
   constructor(message: string) {
@@ -41,7 +47,73 @@ export function parseSchema(yamlContent: string): SchemaYaml {
   // Check for cycles
   validateNoCycles(schema.artifacts);
 
-  return schema;
+  // Validate pattern placeholders
+  validatePatternPlaceholders(schema);
+
+  // Apply defaults for validation config and artifact sections
+  return applySchemaDefaults(schema);
+}
+
+/**
+ * Validates that all pattern strings contain the {name} placeholder.
+ */
+function validatePatternPlaceholders(schema: SchemaYaml): void {
+  // Check specValidation.pattern
+  if (schema.specValidation?.pattern && !schema.specValidation.pattern.includes('{name}')) {
+    throw new SchemaValidationError(
+      `specValidation.pattern must include {name} placeholder, got: "${schema.specValidation.pattern}"`
+    );
+  }
+
+  // Check artifact sections.requirement.pattern
+  for (const artifact of schema.artifacts) {
+    const pattern = artifact.sections?.requirement?.pattern;
+    if (pattern && !pattern.includes('{name}')) {
+      throw new SchemaValidationError(
+        `Artifact '${artifact.id}' sections.requirement.pattern must include {name} placeholder, got: "${pattern}"`
+      );
+    }
+  }
+}
+
+/**
+ * Applies default values for validation config and artifact sections.
+ * Zod handles most defaults, but we need to apply defaults for the specs artifact
+ * when sections are not explicitly configured.
+ */
+function applySchemaDefaults(schema: SchemaYaml): SchemaYaml {
+  // Apply defaults for changeValidation and specValidation using Zod's default parsing
+  const changeValidation = schema.changeValidation
+    ? ChangeValidationSchema.parse(schema.changeValidation)
+    : ChangeValidationSchema.parse({});
+
+  const specValidation = schema.specValidation
+    ? SpecValidationSchema.parse(schema.specValidation)
+    : SpecValidationSchema.parse({});
+
+  // Apply defaults for specs artifact sections if not specified
+  const artifacts = schema.artifacts.map(artifact => {
+    if (artifact.id === 'specs' && !artifact.sections) {
+      return {
+        ...artifact,
+        sections: {
+          required: ['Purpose', 'Requirements'],
+          requirement: {
+            section: 'Requirements',
+            pattern: '### Requirement: {name}',
+          },
+        },
+      };
+    }
+    return artifact;
+  });
+
+  return {
+    ...schema,
+    changeValidation,
+    specValidation,
+    artifacts,
+  };
 }
 
 /**

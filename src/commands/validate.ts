@@ -1,9 +1,12 @@
 import ora from 'ora';
 import path from 'path';
-import { Validator } from '../core/validation/validator.js';
+import { Validator, SpecValidationConfig } from '../core/validation/validator.js';
 import { isInteractive, resolveNoInteractive } from '../utils/interactive.js';
 import { getActiveChangeIds, getSpecIds } from '../utils/item-discovery.js';
 import { nearestMatches } from '../utils/match.js';
+import { readProjectConfig } from '../core/project-config.js';
+import { resolveSchema } from '../core/artifact-graph/resolver.js';
+import type { SchemaYaml } from '../core/artifact-graph/types.js';
 
 type ItemType = 'change' | 'spec';
 
@@ -25,6 +28,41 @@ interface BulkItemResult {
   valid: boolean;
   issues: { level: 'ERROR' | 'WARNING' | 'INFO'; path: string; message: string }[];
   durationMs: number;
+}
+
+/**
+ * Builds a SpecValidationConfig from a schema's configuration.
+ */
+function buildValidationConfig(schema: SchemaYaml): SpecValidationConfig {
+  const specsArtifact = schema.artifacts.find(a => a.id === 'specs');
+  const sections = specsArtifact?.sections;
+
+  return {
+    requiredSections: sections?.required,
+    requirementSection: sections?.requirement?.section,
+    requirementPattern: sections?.requirement?.pattern,
+    scenarioPattern: schema.specValidation?.pattern,
+    scenariosRequired: schema.specValidation?.required,
+    scenarioArtifact: schema.specValidation?.artifact,
+    shallMustPattern: schema.specValidation?.shallMustPattern,
+  };
+}
+
+/**
+ * Loads the project's schema and returns validation config.
+ * Returns undefined if no config or schema found (uses defaults).
+ */
+function loadProjectValidationConfig(projectRoot: string): SpecValidationConfig | undefined {
+  try {
+    const config = readProjectConfig(projectRoot);
+    if (!config?.schema) return undefined;
+
+    const schema = resolveSchema(config.schema, projectRoot);
+    return buildValidationConfig(schema);
+  } catch {
+    // If schema loading fails, use defaults
+    return undefined;
+  }
 }
 
 export class ValidateCommand {
@@ -129,19 +167,22 @@ export class ValidateCommand {
 
   private async validateByType(type: ItemType, id: string, opts: { strict: boolean; json: boolean }): Promise<void> {
     const validator = new Validator(opts.strict);
+    const projectRoot = process.cwd();
+    const validationConfig = loadProjectValidationConfig(projectRoot);
+
     if (type === 'change') {
-      const changeDir = path.join(process.cwd(), 'openspec', 'changes', id);
+      const changeDir = path.join(projectRoot, 'openspec', 'changes', id);
       const start = Date.now();
-      const report = await validator.validateChangeDeltaSpecs(changeDir);
+      const report = await validator.validateChangeDeltaSpecs(changeDir, validationConfig);
       const durationMs = Date.now() - start;
       this.printReport('change', id, report, durationMs, opts.json);
       // Non-zero exit if invalid (keeps enriched output test semantics)
       process.exitCode = report.valid ? 0 : 1;
       return;
     }
-    const file = path.join(process.cwd(), 'openspec', 'specs', id, 'spec.md');
+    const file = path.join(projectRoot, 'openspec', 'specs', id, 'spec.md');
     const start = Date.now();
-    const report = await validator.validateSpec(file);
+    const report = await validator.validateSpec(file, validationConfig);
     const durationMs = Date.now() - start;
     this.printReport('spec', id, report, durationMs, opts.json);
     process.exitCode = report.valid ? 0 : 1;
@@ -183,6 +224,7 @@ export class ValidateCommand {
 
   private async runBulkValidation(scope: { changes: boolean; specs: boolean }, opts: { strict: boolean; json: boolean; concurrency?: string; noInteractive?: boolean }): Promise<void> {
     const spinner = !opts.json && !opts.noInteractive ? ora('Validating...').start() : undefined;
+    const projectRoot = process.cwd();
     const [changeIds, specIds] = await Promise.all([
       scope.changes ? getActiveChangeIds() : Promise.resolve<string[]>([]),
       scope.specs ? getSpecIds() : Promise.resolve<string[]>([]),
@@ -192,13 +234,14 @@ export class ValidateCommand {
     const maxSuggestions = 5; // used by nearestMatches
     const concurrency = normalizeConcurrency(opts.concurrency) ?? normalizeConcurrency(process.env.OPENSPEC_CONCURRENCY) ?? DEFAULT_CONCURRENCY;
     const validator = new Validator(opts.strict);
+    const validationConfig = loadProjectValidationConfig(projectRoot);
     const queue: Array<() => Promise<BulkItemResult>> = [];
 
     for (const id of changeIds) {
       queue.push(async () => {
         const start = Date.now();
-        const changeDir = path.join(process.cwd(), 'openspec', 'changes', id);
-        const report = await validator.validateChangeDeltaSpecs(changeDir);
+        const changeDir = path.join(projectRoot, 'openspec', 'changes', id);
+        const report = await validator.validateChangeDeltaSpecs(changeDir, validationConfig);
         const durationMs = Date.now() - start;
         return { id, type: 'change' as const, valid: report.valid, issues: report.issues, durationMs };
       });
@@ -206,8 +249,8 @@ export class ValidateCommand {
     for (const id of specIds) {
       queue.push(async () => {
         const start = Date.now();
-        const file = path.join(process.cwd(), 'openspec', 'specs', id, 'spec.md');
-        const report = await validator.validateSpec(file);
+        const file = path.join(projectRoot, 'openspec', 'specs', id, 'spec.md');
+        const report = await validator.validateSpec(file, validationConfig);
         const durationMs = Date.now() - start;
         return { id, type: 'spec' as const, valid: report.valid, issues: report.issues, durationMs };
       });

@@ -1,3 +1,5 @@
+<!-- Format configured in schema.yaml under sections.requirement and specValidation -->
+
 ## ADDED Requirements
 
 ### Requirement: <!-- requirement name -->

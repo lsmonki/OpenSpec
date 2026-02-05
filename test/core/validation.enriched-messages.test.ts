@@ -44,7 +44,8 @@ There are changes proposed, but no delta specs provided yet.`;
     expect(report.valid).toBe(false);
     const msg = report.issues.map(i => i.message).join('\n');
     expect(msg).toContain('Spec must have a Purpose section');
-    expect(msg).toContain('Expected headers: "## Purpose" and "## Requirements"');
+    expect(msg).toContain('Spec files must include');
+    expect(msg).toContain('## Purpose');
   });
 
   it('warns with scenario conversion template when missing scenarios', async () => {
@@ -66,8 +67,48 @@ Text of requirement
     expect(report.valid).toBe(false);
     const warn = report.issues.find(i => i.path.includes('requirements[0].scenarios'));
     expect(warn?.message).toContain('Requirement must have at least one scenario');
-    expect(warn?.message).toContain('Scenarios must use level-4 headers');
     expect(warn?.message).toContain('#### Scenario:');
+  });
+
+  it('shows schema-configured scenario pattern in error message', async () => {
+    const specContent = `# Test Spec
+
+## Purpose
+This is a sufficiently long purpose section.
+
+## Requirements
+
+### Requirement: Foo SHALL be described
+Text of requirement
+`;
+    const specPath = path.join(testDir, 'spec.md');
+    await fs.writeFile(specPath, specContent);
+
+    const validator = new Validator();
+    const config = {
+      scenarioPattern: '### Scenario: {name}',
+    };
+    const report = await validator.validateSpec(specPath, config);
+    const warn = report.issues.find(i => i.path.includes('requirements[0].scenarios'));
+    expect(warn?.message).toContain('### Scenario:'); // Shows configured pattern, not default
+  });
+
+  it('shows schema-configured section names in error message', async () => {
+    const specContent = `# Test Spec
+
+## Overview
+This is the overview section.
+`;
+    const specPath = path.join(testDir, 'spec.md');
+    await fs.writeFile(specPath, specContent);
+
+    const validator = new Validator();
+    const config = {
+      requiredSections: ['Overview', 'Functional Requirements'],
+    };
+    const report = await validator.validateSpec(specPath, config);
+    const msg = report.issues.map(i => i.message).join('\n');
+    expect(msg).toContain('Functional Requirements'); // Shows configured section name
   });
 });
 

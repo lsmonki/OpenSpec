@@ -1,6 +1,17 @@
 name: spec-driven
 version: 1
 description: Default OpenSpec workflow - proposal → specs → design → tasks
+
+# Validation configuration for changes (delta specs)
+changeValidation:
+  artifact: verify  # Which artifact type validates changes
+
+# Validation configuration for specs (scenarios)
+specValidation:
+  artifact: specs              # Which artifact contains scenarios
+  pattern: "#### Scenario: {name}"  # Scenario header pattern ({name} = scenario name)
+  required: true               # Whether scenarios are required
+
 artifacts:
   - id: proposal
     generates: proposal.md
@@ -31,6 +42,15 @@ artifacts:
     generates: "specs/**/*.md"
     description: Detailed specifications for the change
     template: spec.md
+    # Section configuration for spec format validation
+    sections:
+      required:
+        - Purpose
+        - Requirements
+      optional: []
+      requirement:
+        section: Requirements      # Section containing requirements
+        pattern: "### Requirement: {name}"  # Requirement header pattern
     instruction: |
       Create specification files that define WHAT the system should do.
 

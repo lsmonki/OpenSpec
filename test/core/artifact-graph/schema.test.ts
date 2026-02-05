@@ -203,5 +203,145 @@ artifacts:
       const schema = parseSchema(yaml);
       expect(schema.artifacts[0].requires).toEqual([]);
     });
+
+    it('should apply default changeValidation and specValidation', () => {
+      const yaml = `
+name: test
+version: 1
+artifacts:
+  - id: proposal
+    generates: proposal.md
+    description: Proposal
+    template: templates/proposal.md
+`;
+      const schema = parseSchema(yaml);
+      expect(schema.changeValidation).toEqual({ artifact: 'verify' });
+      expect(schema.specValidation).toEqual({
+        artifact: 'specs',
+        pattern: '#### Scenario: {name}',
+        required: true,
+        shallMustPattern: 'SHALL|MUST',
+      });
+    });
+
+    it('should parse custom changeValidation and specValidation', () => {
+      const yaml = `
+name: test
+version: 1
+changeValidation:
+  artifact: verify-custom
+specValidation:
+  artifact: spec-verify
+  pattern: "### Scenario: {name}"
+  required: false
+artifacts:
+  - id: proposal
+    generates: proposal.md
+    description: Proposal
+    template: templates/proposal.md
+`;
+      const schema = parseSchema(yaml);
+      expect(schema.changeValidation).toEqual({ artifact: 'verify-custom' });
+      expect(schema.specValidation).toEqual({
+        artifact: 'spec-verify',
+        pattern: '### Scenario: {name}',
+        required: false,
+        shallMustPattern: 'SHALL|MUST', // default value
+      });
+    });
+
+    it('should apply default sections to specs artifact', () => {
+      const yaml = `
+name: test
+version: 1
+artifacts:
+  - id: specs
+    generates: "specs/**/*.md"
+    description: Specs
+    template: templates/spec.md
+`;
+      const schema = parseSchema(yaml);
+      const specsArtifact = schema.artifacts.find(a => a.id === 'specs');
+      expect(specsArtifact?.sections).toEqual({
+        required: ['Purpose', 'Requirements'],
+        requirement: {
+          section: 'Requirements',
+          pattern: '### Requirement: {name}',
+        },
+      });
+    });
+
+    it('should preserve custom sections on specs artifact', () => {
+      const yaml = `
+name: test
+version: 1
+artifacts:
+  - id: specs
+    generates: "specs/**/*.md"
+    description: Specs
+    template: templates/spec.md
+    sections:
+      required:
+        - Purpose
+        - Functional Requirements
+      requirement:
+        section: Functional Requirements
+        pattern: "## RF-{name}:"
+`;
+      const schema = parseSchema(yaml);
+      const specsArtifact = schema.artifacts.find(a => a.id === 'specs');
+      expect(specsArtifact?.sections?.required).toEqual(['Purpose', 'Functional Requirements']);
+      expect(specsArtifact?.sections?.requirement?.section).toBe('Functional Requirements');
+      expect(specsArtifact?.sections?.requirement?.pattern).toBe('## RF-{name}:');
+    });
+
+    it('should not apply sections defaults to non-specs artifacts', () => {
+      const yaml = `
+name: test
+version: 1
+artifacts:
+  - id: proposal
+    generates: proposal.md
+    description: Proposal
+    template: templates/proposal.md
+`;
+      const schema = parseSchema(yaml);
+      const proposalArtifact = schema.artifacts.find(a => a.id === 'proposal');
+      expect(proposalArtifact?.sections).toBeUndefined();
+    });
+
+    it('should throw on specValidation.pattern missing {name} placeholder', () => {
+      const yaml = `
+name: test
+version: 1
+specValidation:
+  pattern: "#### Scenario:"
+artifacts:
+  - id: proposal
+    generates: proposal.md
+    description: Proposal
+    template: templates/proposal.md
+`;
+      expect(() => parseSchema(yaml)).toThrow(SchemaValidationError);
+      expect(() => parseSchema(yaml)).toThrow(/specValidation.pattern must include \{name\}/);
+    });
+
+    it('should throw on artifact sections.requirement.pattern missing {name} placeholder', () => {
+      const yaml = `
+name: test
+version: 1
+artifacts:
+  - id: specs
+    generates: "specs/**/*.md"
+    description: Specs
+    template: templates/spec.md
+    sections:
+      requirement:
+        section: Requirements
+        pattern: "### Requirement:"
+`;
+      expect(() => parseSchema(yaml)).toThrow(SchemaValidationError);
+      expect(() => parseSchema(yaml)).toThrow(/sections.requirement.pattern must include \{name\}/);
+    });
   });
 });

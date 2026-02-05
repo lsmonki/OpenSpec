@@ -255,6 +255,7 @@ specValidation:
   artifact: string                      # Which artifact contains scenarios (e.g., "specs" or "spec-verify")
   pattern: string                       # Pattern to identify scenarios (e.g., "#### Scenario: {name}")
   required: boolean                     # Whether scenarios are mandatory
+  shallMustPattern: string | null       # Regex pattern for normative keywords (e.g., "SHALL|MUST"), null to disable
 ```
 
 #### Artifact-Level Structure Config
@@ -286,10 +287,41 @@ artifacts:
 | `specValidation.artifact` | `string` | `"specs"` | Artifact containing scenarios (`"specs"` = inline) |
 | `specValidation.pattern` | `string` | `"#### Scenario: {name}"` | Pattern to identify scenario blocks |
 | `specValidation.required` | `boolean` | `true` | Whether validation fails if no scenarios found |
+| `specValidation.shallMustPattern` | `string \| null` | `"SHALL\|MUST"` | Regex pattern for normative keywords; `null` or empty to disable |
 | `sections.required` | `string[]` | `["Purpose", "Requirements"]` | Section headers that must exist |
 | `sections.optional` | `string[]` | `[]` | Section headers that are recognized but optional |
 | `sections.requirement.section` | `string` | `"Requirements"` | Section containing requirements (used for delta operations) |
 | `sections.requirement.pattern` | `string` | `"### Requirement: {name}"` | Pattern to identify requirement blocks |
+
+**`shallMustPattern` Examples:**
+
+```yaml
+# Default: strict uppercase (RFC 2119 style)
+shallMustPattern: "SHALL|MUST"
+# Matches: "The system SHALL validate input"
+# Matches: "Users MUST authenticate"
+# Fails:   "The system should validate input"
+
+# Case-insensitive: accepts lowercase variants
+shallMustPattern: "[Ss][Hh][Aa][Ll][Ll]|[Mm][Uu][Ss][Tt]"
+# Matches: "The system shall validate input"
+# Matches: "Users must authenticate"
+# Matches: "The system SHALL validate input"
+
+# Extended: include SHOULD for less strict requirements
+shallMustPattern: "SHALL|MUST|SHOULD"
+# Matches: "The system SHOULD log errors"
+
+# Spanish: for Spanish-language specifications
+shallMustPattern: "DEBE|DEBERÁ|TIENE QUE"
+# Matches: "El sistema DEBE validar la entrada"
+
+# Disabled: no normative keyword validation
+shallMustPattern: null
+# or
+shallMustPattern: ""
+# All requirements pass regardless of wording
+```
 
 **Delta sections** are derived from `sections.requirement.section`:
 - If `sections.requirement.section: "Functional Requirements"`, deltas use `## ADDED Functional Requirements`, `## MODIFIED Functional Requirements`, etc.
@@ -431,6 +463,7 @@ specValidation:
   artifact: "specs"                      # scenarios inline in spec.md
   pattern: "#### Scenario: {name}"
   required: true
+  shallMustPattern: "SHALL|MUST"         # regex pattern for normative keywords (null to disable)
 
 # Default for specs artifact
 artifacts:

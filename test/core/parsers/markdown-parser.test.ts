@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { MarkdownParser } from '../../../src/core/parsers/markdown-parser.js';
+import { MarkdownParser, SpecFormatConfig } from '../../../src/core/parsers/markdown-parser.js';
 
 describe('MarkdownParser', () => {
   describe('parseSpec', () => {
@@ -284,8 +284,60 @@ Then result`;
 
       const parser = new MarkdownParser(content);
       const spec = parser.parseSpec('test');
-      
+
       expect(spec.requirements[0].text).toBe('This is the actual requirement text.');
+    });
+  });
+
+  describe('parseSpec with custom config', () => {
+    it('should parse spec with custom section names', () => {
+      const content = `# Custom Spec
+
+## Overview
+This is the overview section using a custom name.
+
+## Functional Requirements
+
+### Requirement: User login
+Users can log in.
+
+#### Scenario: Valid credentials
+Given valid creds
+When login
+Then success`;
+
+      const config: SpecFormatConfig = {
+        requiredSections: ['Overview', 'Functional Requirements'],
+        requirementSection: 'Functional Requirements',
+      };
+
+      const parser = new MarkdownParser(content);
+      const spec = parser.parseSpec('custom', config);
+
+      expect(spec.overview).toContain('overview section using a custom name');
+      expect(spec.requirements).toHaveLength(1);
+      expect(spec.requirements[0].text).toBe('Users can log in.');
+    });
+
+    it('should throw error for missing custom section', () => {
+      const content = `# Test Spec
+
+## Purpose
+Test overview
+
+## Requirements
+
+### Requirement: Test
+Test content`;
+
+      const config: SpecFormatConfig = {
+        requiredSections: ['Overview', 'Requirements'],
+        requirementSection: 'Requirements',
+      };
+
+      const parser = new MarkdownParser(content);
+      // Should throw because 'Overview' is required but 'Purpose' exists
+      expect(() => parser.parseSpec('test', config)).toThrow('must have a Overview section');
     });
   });
 });

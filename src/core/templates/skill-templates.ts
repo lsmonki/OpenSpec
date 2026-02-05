@@ -795,15 +795,20 @@ This is an **agent-driven** operation - you will read delta specs and directly e
 
    **IMPORTANT**: Do NOT guess or auto-select a change. Always let the user choose.
 
-2. **Find delta specs**
+2. **Find delta specs and read schema config**
 
    Look for delta spec files in \`openspec/changes/<name>/specs/*/spec.md\`.
 
-   Each delta spec file contains sections like:
-   - \`## ADDED Requirements\` - New requirements to add
-   - \`## MODIFIED Requirements\` - Changes to existing requirements
-   - \`## REMOVED Requirements\` - Requirements to remove
-   - \`## RENAMED Requirements\` - Requirements to rename (FROM:/TO: format)
+   Read \`openspec/schema.yaml\` for format configuration (if it exists). Key fields:
+   - \`sections.requirement.section\`: Section name (default: \`Requirements\`)
+   - \`sections.requirement.pattern\`: Requirement header pattern (default: \`### Requirement: {name}\`)
+   - \`specValidation.pattern\`: Scenario pattern (default: \`#### Scenario: {name}\`)
+
+   Each delta spec file contains sections named with the configured section name:
+   - \`## ADDED <section>\` - New requirements to add
+   - \`## MODIFIED <section>\` - Changes to existing requirements
+   - \`## REMOVED <section>\` - Requirements to remove
+   - \`## RENAMED <section>\` - Requirements to rename (FROM:/TO: format)
 
    If no delta specs found, inform user and stop.
 
@@ -846,7 +851,7 @@ This is an **agent-driven** operation - you will read delta specs and directly e
    - Which capabilities were updated
    - What changes were made (requirements added/modified/removed/renamed)
 
-**Delta Spec Format Reference**
+**Delta Spec Format Reference** (default format - may differ per schema)
 
 \`\`\`markdown
 ## ADDED Requirements
@@ -874,6 +879,8 @@ The system SHALL do something new.
 - FROM: \`### Requirement: Old Name\`
 - TO: \`### Requirement: New Name\`
 \`\`\`
+
+**Note:** The section name ("Requirements") and header patterns are configurable via schema.yaml. Check \`sections.requirement\` for actual patterns.
 
 **Key Principle: Intelligent Merging**
 
@@ -2493,15 +2500,20 @@ This is an **agent-driven** operation - you will read delta specs and directly e
 
    **IMPORTANT**: Do NOT guess or auto-select a change. Always let the user choose.
 
-2. **Find delta specs**
+2. **Find delta specs and read schema config**
 
    Look for delta spec files in \`openspec/changes/<name>/specs/*/spec.md\`.
 
-   Each delta spec file contains sections like:
-   - \`## ADDED Requirements\` - New requirements to add
-   - \`## MODIFIED Requirements\` - Changes to existing requirements
-   - \`## REMOVED Requirements\` - Requirements to remove
-   - \`## RENAMED Requirements\` - Requirements to rename (FROM:/TO: format)
+   Read \`openspec/schema.yaml\` for format configuration (if it exists). Key fields:
+   - \`sections.requirement.section\`: Section name (default: \`Requirements\`)
+   - \`sections.requirement.pattern\`: Requirement header pattern (default: \`### Requirement: {name}\`)
+   - \`specValidation.pattern\`: Scenario pattern (default: \`#### Scenario: {name}\`)
+
+   Each delta spec file contains sections named with the configured section name:
+   - \`## ADDED <section>\` - New requirements to add
+   - \`## MODIFIED <section>\` - Changes to existing requirements
+   - \`## REMOVED <section>\` - Requirements to remove
+   - \`## RENAMED <section>\` - Requirements to rename (FROM:/TO: format)
 
    If no delta specs found, inform user and stop.
 
@@ -2544,7 +2556,7 @@ This is an **agent-driven** operation - you will read delta specs and directly e
    - Which capabilities were updated
    - What changes were made (requirements added/modified/removed/renamed)
 
-**Delta Spec Format Reference**
+**Delta Spec Format Reference** (default format - may differ per schema)
 
 \`\`\`markdown
 ## ADDED Requirements
@@ -2572,6 +2584,8 @@ The system SHALL do something new.
 - FROM: \`### Requirement: Old Name\`
 - TO: \`### Requirement: New Name\`
 \`\`\`
+
+**Note:** The section name ("Requirements") and header patterns are configurable via schema.yaml. Check \`sections.requirement\` for actual patterns.
 
 **Key Principle: Intelligent Merging**
 
@@ -2668,7 +2682,10 @@ export function getVerifyChangeSkillTemplate(): SkillTemplate {
 
    **Spec Coverage**:
    - If delta specs exist in \`openspec/changes/<name>/specs/\`:
-     - Extract all requirements (marked with "### Requirement:")
+     - Read schema format config from \`openspec/schema.yaml\` or use defaults:
+       - \`sections.requirement.pattern\` (default: \`### Requirement: {name}\`)
+       - \`specValidation.pattern\` (default: \`#### Scenario: {name}\`)
+     - Extract all requirements using the configured pattern
      - For each requirement:
        - Search codebase for keywords related to the requirement
        - Assess if implementation likely exists
@@ -2688,7 +2705,7 @@ export function getVerifyChangeSkillTemplate(): SkillTemplate {
        - Recommendation: "Review <file>:<lines> against requirement X"
 
    **Scenario Coverage**:
-   - For each scenario in delta specs (marked with "#### Scenario:"):
+   - For each scenario in delta specs (using configured \`specValidation.pattern\`):
      - Check if conditions are handled in code
      - Check if tests exist covering the scenario
      - If scenario appears uncovered:
@@ -3263,7 +3280,10 @@ export function getOpsxVerifyCommandTemplate(): CommandTemplate {
 
    **Spec Coverage**:
    - If delta specs exist in \`openspec/changes/<name>/specs/\`:
-     - Extract all requirements (marked with "### Requirement:")
+     - Read schema format config from \`openspec/schema.yaml\` or use defaults:
+       - \`sections.requirement.pattern\` (default: \`### Requirement: {name}\`)
+       - \`specValidation.pattern\` (default: \`#### Scenario: {name}\`)
+     - Extract all requirements using the configured pattern
      - For each requirement:
        - Search codebase for keywords related to the requirement
        - Assess if implementation likely exists
@@ -3283,7 +3303,7 @@ export function getOpsxVerifyCommandTemplate(): CommandTemplate {
        - Recommendation: "Review <file>:<lines> against requirement X"
 
    **Scenario Coverage**:
-   - For each scenario in delta specs (marked with "#### Scenario:"):
+   - For each scenario in delta specs (using configured \`specValidation.pattern\`):
      - Check if conditions are handled in code
      - Check if tests exist covering the scenario
      - If scenario appears uncovered:
