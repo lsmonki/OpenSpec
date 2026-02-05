@@ -214,3 +214,32 @@ More configuration options mean more for users to understand.
 **Trade-off: Performance of schema-aware parsing**
 Loading schema for every parse operation adds overhead.
 → Accepted: Schema is loaded once per command invocation, not per file. Cache schema in memory during operations.
+
+## Documentation
+
+### User Documentation (docs/customization.md)
+
+Add a "Custom Spec Formats" section documenting:
+
+1. **Schema validation fields** (`specValidation`, `changeValidation`):
+   - `specValidation.pattern`: Scenario header pattern (e.g., `#### Scenario: {name}`)
+   - `specValidation.required`: Whether scenarios are mandatory
+   - `specValidation.artifact`: Which artifact contains scenarios (default: same as specs)
+   - `specValidation.shallMustPattern`: Regex for normative keywords (default: `SHALL|MUST`, set to `null` to disable)
+
+2. **Artifact sections configuration** (`sections`):
+   - `sections.required`: Required section headers (e.g., `["Purpose", "Requirements"]`)
+   - `sections.optional`: Optional section headers
+   - `sections.requirement.section`: Requirements section name (default: `Requirements`)
+   - `sections.requirement.pattern`: Requirement header pattern (default: `### Requirement: {name}`)
+
+3. **Examples**:
+   - Custom requirement format: `## RF-{name}` or `### Req: {name}`
+   - Spanish normative keywords: `shallMustPattern: "DEBE|DEBERÁ"`
+   - Disable normative validation: `shallMustPattern: null`
+   - Scenarios in separate verify.md file
+
+### CHANGELOG Entry
+
+Add "Unreleased" section with:
+- **Configurable spec formats** — Schemas can now define custom requirement patterns, section headers, scenario formats, and normative keyword validation via `specValidation` and `sections` fields

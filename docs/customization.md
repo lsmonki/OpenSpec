@@ -197,6 +197,119 @@ apply:
 | `instruction` | AI instructions for creating this artifact |
 | `requires` | Dependencies - which artifacts must exist first |
 
+### Custom Spec Formats
+
+By default, OpenSpec expects specs to follow a specific format with `## Requirements`, `### Requirement: {name}`, and `#### Scenario: {name}` headers. You can customize this format in your schema using `specValidation` and `sections` configuration.
+
+#### Spec Validation (`specValidation`)
+
+Controls how specs are validated:
+
+```yaml
+# schema.yaml
+specValidation:
+  pattern: "#### Scenario: {name}"  # Scenario header pattern
+  required: true                     # Are scenarios mandatory?
+  artifact: specs                    # Which artifact contains scenarios
+  shallMustPattern: "SHALL|MUST"     # Normative keyword pattern (null to disable)
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `pattern` | `#### Scenario: {name}` | Pattern for scenario headers. `{name}` is replaced with capture group. |
+| `required` | `true` | Whether scenarios are required for each requirement. |
+| `artifact` | `specs` | Which artifact contains scenarios (use different artifact for separate verify files). |
+| `shallMustPattern` | `SHALL\|MUST` | Regex pattern for normative keywords. Set to `null` to disable validation. |
+
+#### Sections Configuration (`sections`)
+
+Controls spec structure validation per artifact:
+
+```yaml
+# schema.yaml
+artifacts:
+  - id: specs
+    generates: "specs/**/*.md"
+    sections:
+      required:
+        - Purpose
+        - Requirements
+      optional:
+        - Definitions
+        - Status
+      requirement:
+        section: Requirements           # Section containing requirements
+        pattern: "### Requirement: {name}"  # Requirement header pattern
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `sections.required` | `["Purpose", "Requirements"]` | Section headers that must be present. |
+| `sections.optional` | `[]` | Section headers that are recognized but not required. |
+| `sections.requirement.section` | `Requirements` | Name of the section containing requirements. |
+| `sections.requirement.pattern` | `### Requirement: {name}` | Pattern for requirement headers. |
+
+#### Examples
+
+**Custom requirement pattern:**
+
+```yaml
+# Use "### Req: Name" instead of "### Requirement: Name"
+artifacts:
+  - id: specs
+    sections:
+      requirement:
+        pattern: "### Req: {name}"
+```
+
+**Spanish normative keywords:**
+
+```yaml
+# Accept DEBE/DEBERÁ instead of SHALL/MUST
+specValidation:
+  shallMustPattern: "DEBE|DEBERÁ"
+```
+
+**Disable normative validation:**
+
+```yaml
+# Don't require SHALL/MUST in requirement text
+specValidation:
+  shallMustPattern: null
+```
+
+**Case-insensitive normative keywords:**
+
+```yaml
+# Accept shall/Shall/SHALL etc.
+specValidation:
+  shallMustPattern: "[Ss][Hh][Aa][Ll][Ll]|[Mm][Uu][Ss][Tt]"
+```
+
+**Scenarios in separate file:**
+
+```yaml
+# Scenarios live in verify.md, not spec.md
+specValidation:
+  artifact: verify
+  required: true
+
+artifacts:
+  - id: specs
+    generates: "specs/**/spec.md"
+  - id: verify
+    generates: "specs/**/verify.md"
+    requires: [specs]
+```
+
+**Optional scenarios:**
+
+```yaml
+# Scenarios are recommended but not required
+specValidation:
+  required: false
+```
+
 ### Templates
 
 Templates are markdown files that guide the AI. They're injected into the prompt when creating that artifact.

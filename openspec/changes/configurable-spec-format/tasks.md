@@ -61,3 +61,11 @@
 - [x] 8.2 Verify backward compatibility: existing schemas work without modification
 - [x] 8.3 Test cross-platform path handling in spec discovery (Windows CI verification)
 - [x] 8.4 Test validation error messages show correct schema-configured formats
+
+## 9. Documentation
+
+- [x] 9.1 Add "Custom Spec Formats" section to `docs/customization.md` documenting schema validation fields
+- [x] 9.2 Document `specValidation` fields: `pattern`, `required`, `artifact`, `shallMustPattern`
+- [x] 9.3 Document `sections` configuration: `required`, `optional`, `requirement.section`, `requirement.pattern`
+- [x] 9.4 Add examples for common customizations (custom patterns, Spanish keywords, disabled validation)
+- [x] 9.5 Add CHANGELOG entry under "Unreleased" section
