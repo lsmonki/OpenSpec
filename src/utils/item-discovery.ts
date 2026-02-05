@@ -1,13 +1,6 @@
 import { promises as fs } from 'fs';
 import path from 'path';
-
-/**
- * Configuration for spec discovery.
- */
-export interface SpecDiscoveryConfig {
-  /** File names to look for in spec directories (default: ['spec.md']) */
-  requiredFiles?: string[];
-}
+import { findAllSpecs } from './spec-discovery.js';
 
 export async function getActiveChangeIds(root: string = process.cwd()): Promise<string[]> {
   const changesPath = path.join(root, 'openspec', 'changes');
@@ -30,38 +23,15 @@ export async function getActiveChangeIds(root: string = process.cwd()): Promise<
   }
 }
 
-export async function getSpecIds(
-  root: string = process.cwd(),
-  config?: SpecDiscoveryConfig
-): Promise<string[]> {
+export async function getSpecIds(root: string = process.cwd()): Promise<string[]> {
   const specsPath = path.join(root, 'openspec', 'specs');
-  const requiredFiles = config?.requiredFiles ?? ['spec.md'];
-  const result: string[] = [];
   try {
-    const entries = await fs.readdir(specsPath, { withFileTypes: true });
-    for (const entry of entries) {
-      if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
-
-      // Check that all required files exist
-      let hasAllFiles = true;
-      for (const fileName of requiredFiles) {
-        const filePath = path.join(specsPath, entry.name, fileName);
-        try {
-          await fs.access(filePath);
-        } catch {
-          hasAllFiles = false;
-          break;
-        }
-      }
-
-      if (hasAllFiles) {
-        result.push(entry.name);
-      }
-    }
+    // Use hierarchical spec discovery that supports nested structures
+    const specs = findAllSpecs(specsPath);
+    return specs.map(spec => spec.capability).sort();
   } catch {
-    // ignore
+    return [];
   }
-  return result.sort();
 }
 
 export async function getArchivedChangeIds(root: string = process.cwd()): Promise<string[]> {

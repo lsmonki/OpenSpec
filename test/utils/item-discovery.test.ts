@@ -37,23 +37,6 @@ describe('item-discovery', () => {
       expect(ids).toEqual(['has-spec']);
     });
 
-    it('should support custom required files', async () => {
-      const specsDir = path.join(testDir, 'openspec', 'specs');
-      await fs.mkdir(path.join(specsDir, 'complete-spec'), { recursive: true });
-      await fs.mkdir(path.join(specsDir, 'partial-spec'), { recursive: true });
-
-      // complete-spec has both required files
-      await fs.writeFile(path.join(specsDir, 'complete-spec', 'spec.md'), '# Spec');
-      await fs.writeFile(path.join(specsDir, 'complete-spec', 'verify.md'), '# Verify');
-
-      // partial-spec only has spec.md
-      await fs.writeFile(path.join(specsDir, 'partial-spec', 'spec.md'), '# Spec');
-
-      const config = { requiredFiles: ['spec.md', 'verify.md'] };
-      const ids = await getSpecIds(testDir, config);
-      expect(ids).toEqual(['complete-spec']);
-    });
-
     it('should return empty array when specs directory does not exist', async () => {
       const ids = await getSpecIds(testDir);
       expect(ids).toEqual([]);
