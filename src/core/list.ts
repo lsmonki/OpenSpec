@@ -4,6 +4,8 @@ import { getTaskProgressForChange, formatTaskStatus } from '../utils/task-progre
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { MarkdownParser } from './parsers/markdown-parser.js';
+import { resolveSpecsPaths } from '../utils/specs-path.js';
+import { readProjectConfig } from './project-config.js';
 
 interface ChangeInfo {
   name: string;
@@ -152,7 +154,9 @@ export class ListCommand {
     }
 
     // specs mode
-    const specsDir = path.join(targetPath, 'openspec', 'specs');
+    const projectConfig = readProjectConfig(targetPath);
+    const specsPaths = resolveSpecsPaths(targetPath, projectConfig?.specsPath);
+    const specsDir = specsPaths.absolute;
     try {
       await fs.access(specsDir);
     } catch {

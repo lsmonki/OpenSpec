@@ -22,6 +22,7 @@ Specs are project contracts, not OpenSpec artifacts. They should be independent 
 
 ### New Capabilities
 - `configurable-specs-path`: Defines the `specsPath` configuration option, path resolution utility, cross-platform normalization, and placeholder replacement mechanism
+- `docs-specs-path`: Documentation for `specsPath` in `docs/customization.md` including usage examples, path format conventions, cross-platform behavior, `openspec update` requirement after config changes, and `{{specsPath}}` placeholder guidance for custom schema authors
 
 ### Modified Capabilities
 - `instruction-loader`: Add placeholder replacement support (`{{specsPath}}` and extensible via a key-value map) during instruction generation

@@ -6,8 +6,12 @@ import { Validator } from '../core/validation/validator.js';
 import type { Spec } from '../core/schemas/index.js';
 import { isInteractive } from '../utils/interactive.js';
 import { getSpecIds } from '../utils/item-discovery.js';
+import { resolveSpecsPaths } from '../utils/specs-path.js';
+import { readProjectConfig } from '../core/project-config.js';
 
-const SPECS_DIR = 'openspec/specs';
+const projectConfig = readProjectConfig('.');
+const specsPaths = resolveSpecsPaths('.', projectConfig?.specsPath);
+const SPECS_DIR = specsPaths.relative;
 
 interface ShowOptions {
   json?: boolean;
@@ -65,7 +69,7 @@ function printSpecTextRaw(specPath: string): void {
 }
 
 export class SpecCommand {
-  private SPECS_DIR = 'openspec/specs';
+  private SPECS_DIR = specsPaths.relative;
 
   async show(specId?: string, options: ShowOptions = {}): Promise<void> {
     if (!specId) {

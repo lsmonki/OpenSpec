@@ -1,5 +1,26 @@
 # @fission-ai/openspec
 
+## Unreleased
+
+### Features
+
+- **Configurable specs directory** — New `specsPath` option in `openspec/config.yaml` allows projects to store archived specifications in a custom location instead of the default `openspec/specs/`. Useful for projects that prefer `specs/` or `docs/specifications/` at the repository root.
+
+  ```yaml
+  # openspec/config.yaml
+  specsPath: specs  # or docs/specifications, etc.
+  ```
+
+  After changing `specsPath`, run `openspec update` to regenerate skill files with the new path.
+
+- **`{{specsPath}}` placeholder for custom schemas** — Schema authors can use `{{specsPath}}` in instructions and templates to reference the project's configured specs directory. This ensures custom schemas work correctly regardless of where specs are stored.
+
+### Improvements
+
+- **Cross-platform path support** — The `specsPath` config accepts both forward slashes (`/`) and backslashes (`\`), automatically normalizing for the current operating system.
+
+- **Legacy path auto-replacement** — Custom schemas with hardcoded `openspec/specs` paths are automatically updated to use the configured `specsPath`, with a warning encouraging migration to the `{{specsPath}}` placeholder.
+
 ## 1.1.1
 
 ### Patch Changes

@@ -91,6 +91,72 @@ When OpenSpec needs a schema, it checks in this order:
 
 ---
 
+## Custom Specs Directory
+
+By default, OpenSpec stores archived specifications in `openspec/specs/`. You can configure a different location using the `specsPath` option in your config:
+
+```yaml
+# openspec/config.yaml
+schema: spec-driven
+specsPath: docs/specifications  # Custom location for archived specs
+
+context: |
+  ...
+```
+
+### Cross-Platform Paths
+
+The `specsPath` value accepts both forward slashes (`/`) and backslashes (`\`):
+
+```yaml
+# These are equivalent
+specsPath: docs/specs
+specsPath: docs\specs
+```
+
+OpenSpec normalizes the path for your operating system automatically.
+
+### After Changing specsPath
+
+When you change the `specsPath` in your config, you must regenerate the skill files so they reference the correct location:
+
+```bash
+openspec update
+```
+
+This updates the AI skill templates with your configured specs path. Without this step, AI instructions will still reference the old location.
+
+### Using specsPath in Custom Schemas
+
+When creating custom schemas, use the `{{specsPath}}` placeholder instead of hardcoding paths. This ensures your schema works correctly regardless of the project's configured specs location.
+
+**In schema.yaml instructions:**
+
+```yaml
+# Good - uses placeholder
+instruction: |
+  Check existing specs in {{specsPath}}/<capability>/ before creating new ones.
+  Modified capabilities should reference {{specsPath}}/<existing-name>/.
+
+# Avoid - hardcoded path
+instruction: |
+  Check existing specs in openspec/specs/<capability>/ before creating new ones.
+```
+
+**In templates:**
+
+```markdown
+<!-- templates/proposal.md -->
+### Modified Capabilities
+<!-- Use existing spec names from {{specsPath}}/. Leave empty if no changes. -->
+```
+
+The `{{specsPath}}` placeholder is automatically replaced with the project's configured path when generating artifacts.
+
+> **Note:** OpenSpec will warn if it detects hardcoded `openspec/specs` paths in custom schemas and auto-replace them, but using the placeholder explicitly is preferred.
+
+---
+
 ## Custom Schemas
 
 When project config isn't enough, create your own schema with a completely custom workflow. Custom schemas live in your project's `openspec/schemas/` directory and are version-controlled with your code.

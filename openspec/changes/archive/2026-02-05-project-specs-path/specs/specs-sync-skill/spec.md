@@ -1,8 +1,5 @@
-# specs-sync-skill Specification
+## MODIFIED Requirements
 
-## Purpose
-Defines the agent skill for syncing delta specs from changes to main specs.
-## Requirements
 ### Requirement: Specs Sync Skill
 The system SHALL provide an `/opsx:sync` skill that syncs delta specs from a change to the main specs, using the configured specs path.
 
@@ -53,19 +50,3 @@ The agent SHALL reconcile main specs with delta specs using the delta operation 
 #### Scenario: New capability spec
 - **WHEN** delta spec exists for a capability not in main specs
 - **THEN** create new main spec file at `<specsPath>/<capability>/spec.md`
-
-### Requirement: Skill Output
-The skill SHALL provide clear feedback on what was applied.
-
-#### Scenario: Show applied changes
-- **WHEN** reconciliation completes successfully
-- **THEN** display summary of changes per capability:
-  - Number of requirements added
-  - Number of requirements modified
-  - Number of requirements removed
-  - Number of requirements renamed
-
-#### Scenario: No changes needed
-- **WHEN** main specs already match delta specs
-- **THEN** display "Specs already in sync - no changes needed"
-

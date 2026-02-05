@@ -1,14 +1,74 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { getSchemaDir, resolveSchema } from './resolver.js';
+import { getSchemaDir, resolveSchema, isBuiltInSchema } from './resolver.js';
 import { ArtifactGraph } from './graph.js';
 import { detectCompleted } from './state.js';
 import { resolveSchemaForChange } from '../../utils/change-metadata.js';
 import { readProjectConfig, validateConfigRules } from '../project-config.js';
+import { resolveSpecsPaths, DEFAULT_SPECS_PATH } from '../../utils/specs-path.js';
 import type { Artifact, CompletedSet } from './types.js';
 
 // Session-level cache for validation warnings (avoid repeating same warnings)
 const shownWarnings = new Set<string>();
+
+// Session-level cache for legacy path warnings (avoid repeating same warnings)
+const shownLegacyWarnings = new Set<string>();
+
+/**
+ * Replaces placeholders in text with values from the placeholder map.
+ * Uses {{key}} syntax (Mustache-style).
+ *
+ * @param text - Text containing placeholders
+ * @param placeholders - Map of placeholder keys to values
+ * @returns Text with placeholders replaced
+ */
+export function replacePlaceholders(text: string, placeholders: Map<string, string>): string {
+  let result = text;
+  for (const [key, value] of placeholders) {
+    result = result.replaceAll(`{{${key}}}`, value);
+  }
+  return result;
+}
+
+/**
+ * Detects and replaces hardcoded 'openspec/specs' paths with the configured specsPath.
+ * Emits a warning for custom schemas suggesting migration to {{specsPath}}.
+ *
+ * @param text - Text to check for legacy paths
+ * @param specsPath - Configured specs path (relativePosix format)
+ * @param isBuiltIn - Whether this is a built-in schema (no warning emitted)
+ * @param sourceFile - Source file path for warning message
+ * @returns Text with legacy paths replaced
+ */
+export function replaceLegacySpecsPath(
+  text: string,
+  specsPath: string,
+  isBuiltIn: boolean,
+  sourceFile?: string
+): string {
+  // Only replace if specsPath differs from default
+  if (specsPath === DEFAULT_SPECS_PATH) {
+    return text;
+  }
+
+  // Check if text contains hardcoded default path
+  if (!text.includes(DEFAULT_SPECS_PATH)) {
+    return text;
+  }
+
+  // Emit warning for custom schemas (only once per source file)
+  if (!isBuiltIn && sourceFile && !shownLegacyWarnings.has(sourceFile)) {
+    console.warn(
+      `Warning: Found hardcoded '${DEFAULT_SPECS_PATH}' in ${sourceFile}. ` +
+      `Consider migrating to {{specsPath}} placeholder. ` +
+      `Run 'openspec update' after updating your schema.`
+    );
+    shownLegacyWarnings.add(sourceFile);
+  }
+
+  // Replace hardcoded path with configured path
+  return text.replaceAll(DEFAULT_SPECS_PATH, specsPath);
+}
 
 /**
  * Error thrown when loading a template fails.
@@ -258,6 +318,38 @@ export function generateInstructions(
   const rulesForArtifact = projectConfig?.rules?.[artifactId];
   const configRules = rulesForArtifact && rulesForArtifact.length > 0 ? rulesForArtifact : undefined;
 
+  // Build placeholder map for replacement
+  const specsPaths = resolveSpecsPaths(effectiveProjectRoot, projectConfig?.specsPath);
+  const placeholders = new Map<string, string>([
+    ['specsPath', specsPaths.relativePosix],
+  ]);
+
+  // Check if this is a built-in schema (for legacy warning suppression)
+  const builtIn = isBuiltInSchema(context.schemaName);
+  const schemaDir = getSchemaDir(context.schemaName, effectiveProjectRoot);
+
+  // Apply placeholder replacement and legacy path handling to instruction
+  let processedInstruction = artifact.instruction;
+  if (processedInstruction) {
+    processedInstruction = replacePlaceholders(processedInstruction, placeholders);
+    processedInstruction = replaceLegacySpecsPath(
+      processedInstruction,
+      specsPaths.relativePosix,
+      builtIn,
+      schemaDir ? path.join(schemaDir, 'schema.yaml') : undefined
+    );
+  }
+
+  // Apply placeholder replacement and legacy path handling to template
+  let processedTemplate = templateContent;
+  processedTemplate = replacePlaceholders(processedTemplate, placeholders);
+  processedTemplate = replaceLegacySpecsPath(
+    processedTemplate,
+    specsPaths.relativePosix,
+    builtIn,
+    schemaDir ? path.join(schemaDir, 'templates', artifact.template) : undefined
+  );
+
   return {
     changeName: context.changeName,
     artifactId: artifact.id,
@@ -265,10 +357,10 @@ export function generateInstructions(
     changeDir: context.changeDir,
     outputPath: artifact.generates,
     description: artifact.description,
-    instruction: artifact.instruction,
+    instruction: processedInstruction,
     context: configContext,
     rules: configRules,
-    template: templateContent,
+    template: processedTemplate,
     dependencies,
     unlocks,
   };
