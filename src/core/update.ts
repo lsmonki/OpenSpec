@@ -105,12 +105,17 @@ export class UpdateCommand {
 
     // 7. Prepare templates and transformers
     const skillTemplates = getSkillTemplates();
-    const commandContents = getCommandContents();
 
     // Read project config for specsPath
     const projectConfig = readProjectConfig(resolvedProjectPath);
     const specsPaths = resolveSpecsPaths(resolvedProjectPath, projectConfig?.specsPath);
     const specsPathTransformer = createSpecsPathTransformer(specsPaths.relativePosix);
+
+    // Apply specsPath transformer to command contents
+    const commandContents = getCommandContents().map((c) => ({
+      ...c,
+      body: specsPathTransformer(c.body),
+    }));
 
     // 8. Update tools (all if force, otherwise only those needing update)
     const toolsToUpdate = this.force ? configuredTools : toolsNeedingUpdate.map((s) => s.toolId);
@@ -367,12 +372,17 @@ export class UpdateCommand {
     // Create skills for selected tools
     const newlyConfigured: string[] = [];
     const skillTemplates = getSkillTemplates();
-    const commandContents = getCommandContents();
 
     // Read project config for specsPath
     const projectConfig = readProjectConfig(projectPath);
     const specsPaths = resolveSpecsPaths(projectPath, projectConfig?.specsPath);
     const specsPathTransformer = createSpecsPathTransformer(specsPaths.relativePosix);
+
+    // Apply specsPath transformer to command contents
+    const commandContents = getCommandContents().map((c) => ({
+      ...c,
+      body: specsPathTransformer(c.body),
+    }));
 
     for (const toolId of selectedTools) {
       const tool = AI_TOOLS.find((t) => t.value === toolId);

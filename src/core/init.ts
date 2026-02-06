@@ -433,12 +433,17 @@ export class InitCommand {
 
     // Get skill and command templates once (shared across all tools)
     const skillTemplates = getSkillTemplates();
-    const commandContents = getCommandContents();
 
     // Read project config for specsPath
     const projectConfig = readProjectConfig(projectPath);
     const specsPaths = resolveSpecsPaths(projectPath, projectConfig?.specsPath);
     const specsPathTransformer = createSpecsPathTransformer(specsPaths.relativePosix);
+
+    // Apply specsPath transformer to command contents
+    const commandContents = getCommandContents().map((c) => ({
+      ...c,
+      body: specsPathTransformer(c.body),
+    }));
 
     // Process each tool
     for (const tool of tools) {
