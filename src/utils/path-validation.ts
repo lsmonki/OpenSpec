@@ -97,11 +97,11 @@ export function validateConfigPath(
     }
   }
 
-  // 3. Root containment
+  // 3. Root containment (case-insensitive on Windows, matching denylist behavior)
   const normalizedRoot = path.resolve(projectRoot);
-  const isOutside =
-    resolvedAbsolute !== normalizedRoot &&
-    !resolvedAbsolute.startsWith(normalizedRoot + path.sep);
+  const rootCheck = isWindows ? normalizedRoot.toLowerCase() : normalizedRoot;
+  const absCheck = isWindows ? resolvedAbsolute.toLowerCase() : resolvedAbsolute;
+  const isOutside = absCheck !== rootCheck && !absCheck.startsWith(rootCheck + path.sep);
 
   if (isOutside) {
     // Determine allowExternal: use override if provided, otherwise read from config
