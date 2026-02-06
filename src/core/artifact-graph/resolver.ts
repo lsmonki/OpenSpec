@@ -98,7 +98,8 @@ export function getSchemaDir(
  * @returns True if the schema is built-in, false otherwise
  */
 export function isBuiltInSchema(name: string): boolean {
-  const packageDir = path.join(getPackageSchemasDir(), name);
+  const normalizedName = name.replace(/\.ya?ml$/, '');
+  const packageDir = path.join(getPackageSchemasDir(), normalizedName);
   const packageSchemaPath = path.join(packageDir, 'schema.yaml');
   return fs.existsSync(packageSchemaPath);
 }
