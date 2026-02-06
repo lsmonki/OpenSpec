@@ -15,6 +15,14 @@ const shownWarnings = new Set<string>();
 const shownLegacyWarnings = new Set<string>();
 
 /**
+ * Resets warning caches. Exported for testing only.
+ */
+export function _resetWarningState(): void {
+  shownWarnings.clear();
+  shownLegacyWarnings.clear();
+}
+
+/**
  * Replaces placeholders in text with values from the placeholder map.
  * Uses {{key}} syntax (Mustache-style).
  *
