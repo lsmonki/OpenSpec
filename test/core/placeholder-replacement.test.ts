@@ -2,9 +2,14 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   replacePlaceholders,
   replaceLegacySpecsPath,
+  _resetWarningState,
 } from '../../src/core/artifact-graph/instruction-loader.js';
 
 describe('placeholder replacement', () => {
+  beforeEach(() => {
+    _resetWarningState();
+  });
+
   describe('replacePlaceholders', () => {
     it('should replace single placeholder', () => {
       const text = 'Check {{specsPath}}/ for specs';
