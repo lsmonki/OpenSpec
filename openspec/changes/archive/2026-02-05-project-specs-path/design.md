@@ -20,7 +20,7 @@ The codebase already has patterns for:
 - Supporting multiple specs directories per project
 - Runtime path changes without `openspec update`
 - Migrating existing specs to new locations (user responsibility)
-- Supporting absolute paths in config (always relative to projectRoot)
+- Supporting absolute paths in config (paths are always relative to projectRoot)
 
 ## Decisions
 
