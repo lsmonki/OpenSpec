@@ -1,7 +1,7 @@
 # docs-specs-path Specification
 
 ## Purpose
-TBD - created by archiving change project-specs-path. Update Purpose after archive.
+Provide clear, user-facing documentation in `docs/customization.md` for the configurable specs directory feature. Covers `specsPath` configuration, cross-platform path formats, the `allowExternalPaths` opt-in for monorepos, security restrictions (system-directory denylist and `..` depth limit), the `{{specsPath}}` placeholder for custom schema authors, and the requirement to run `openspec update` after changes. The goal is that any user hitting a path validation error can find the relevant flag and constraints without reading source code.
 ## Requirements
 ### Requirement: specsPath documentation in customization guide
 

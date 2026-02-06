@@ -1,7 +1,7 @@
 # path-traversal-guard Specification
 
 ## Purpose
-Generic path validation for configurable paths, preventing traversal into protected system directories, enforcing depth limits, and controlling project root containment.
+Provide a reusable `validateConfigPath` function that guards any user-configurable path (`specsPath`, and future `changesPath`, `schemasPath`, etc.) against unsafe resolution. Enforces three defense layers in strict order: a parent-traversal depth limit (max 3 `..` segments), a platform-aware system-directory denylist (Linux, macOS, Windows), and project-root containment controlled by the `allowExternalPaths` config flag. The function reads config internally so callers need zero boilerplate, and emits a one-time warning per field name when external paths are explicitly allowed.
 
 ## Requirements
 ### Requirement: Generic path validation rejects protected system directories

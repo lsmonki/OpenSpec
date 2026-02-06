@@ -1,7 +1,7 @@
 # configurable-specs-path Specification
 
 ## Purpose
-TBD - created by archiving change project-specs-path. Update Purpose after archive.
+Allow teams to store archived specifications in a project-relative directory of their choice (`specsPath`) instead of the hardcoded `openspec/specs/` default. This supports monorepos, documentation-centric layouts, and organizations that co-locate specs with other artifacts. External paths (outside the project root) are gated behind an explicit `allowExternalPaths` opt-in, with platform-aware system-directory blocking and parent-traversal depth limits to prevent accidental or malicious path abuse. The feature must work cross-platform, require zero changes to existing call sites, and remain fully backward-compatible when no config is provided.
 ## Requirements
 ### Requirement: Project config supports specsPath field
 
