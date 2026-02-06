@@ -830,7 +830,7 @@ This is an **agent-driven** operation - you will read delta specs and directly e
 
 2. **Find delta specs and read schema config**
 
-   Look for delta spec files in \`openspec/changes/<name>/specs/*/spec.md\`.
+   Look for delta spec files in \`openspec/changes/<name>/specs/<capability-path>/spec.md\`.
 
    Read \`openspec/schema.yaml\` for format configuration (if it exists). Key fields:
    - \`sections.requirement.section\`: Section name (default: \`Requirements\`)
@@ -2568,7 +2568,7 @@ This is an **agent-driven** operation - you will read delta specs and directly e
 
 2. **Find delta specs and read schema config**
 
-   Look for delta spec files in \`openspec/changes/<name>/specs/*/spec.md\`.
+   Look for delta spec files in \`openspec/changes/<name>/specs/<capability-path>/spec.md\`.
 
    Read \`openspec/schema.yaml\` for format configuration (if it exists). Key fields:
    - \`sections.requirement.section\`: Section name (default: \`Requirements\`)
