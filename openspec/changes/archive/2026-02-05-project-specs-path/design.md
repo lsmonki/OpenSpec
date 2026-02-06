@@ -24,7 +24,7 @@ The codebase already has patterns for:
 
 ## Decisions
 
-### 1. Single path resolution utility
+### 1. Single-path resolution utility
 
 **Decision**: Create `resolveSpecsPaths()` returning three representations (absolute, relative, relativePosix).
 

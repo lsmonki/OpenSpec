@@ -1,7 +1,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Tool-Agnostic Updates
-The update command SHALL refresh OpenSpec-managed files in a predictable manner while respecting each team's chosen tooling and configured specs path.
+The update command SHALL refresh OpenSpec-managed files predictably while respecting each team's chosen tooling and configured specs path.
 
 #### Scenario: Updating files
 - **WHEN** updating files

@@ -32,7 +32,7 @@ The update command SHALL handle file updates in a predictable and safe manner.
 - **AND** if a root-level stub exists, update the managed block content so it keeps directing teammates to `@/openspec/AGENTS.md`
 
 ### Requirement: Tool-Agnostic Updates
-The update command SHALL refresh OpenSpec-managed files in a predictable manner while respecting each team's chosen tooling and configured specs path.
+The update command SHALL refresh OpenSpec-managed files predictably while respecting each team's chosen tooling and configured specs path.
 
 #### Scenario: Updating files
 - **WHEN** updating files
