@@ -10,7 +10,7 @@ Validation output SHALL include specific guidance to fix each error, including e
 - **WHEN** validating a change with zero parsed deltas
 - **THEN** show error "No deltas found" with guidance:
   - Explain that change specs must include `## ADDED Requirements`, `## MODIFIED Requirements`, `## REMOVED Requirements`, or `## RENAMED Requirements`
-  - Remind authors that files must live under `openspec/changes/{id}/specs/<capability>/spec.md`
+  - Remind authors that files must live under `openspec/changes/{id}/specs/<capability-path>/spec.md`
   - Include an explicit note: "Spec delta files cannot start with titles before the operation headers"
   - Suggest running `openspec change show {id} --json --deltas-only` for debugging
 

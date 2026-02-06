@@ -532,7 +532,7 @@ export class Validator {
     if (msg === VALIDATION_MESSAGES.CHANGE_NO_DELTAS) {
       // Use configured section name in guidance
       const deltaHeaders = `## ADDED ${sectionName}, ## MODIFIED ${sectionName}, ## REMOVED ${sectionName}, or ## RENAMED ${sectionName}`;
-      return `${msg}. Change specs must include ${deltaHeaders}. Files must live under openspec/changes/{id}/specs/<capability>/spec.md.`;
+      return `${msg}. Change specs must include ${deltaHeaders}. Files must live under openspec/changes/{id}/specs/<capability-path>/spec.md.`;
     }
     if (msg.includes('Spec must have a') && msg.includes('section')) {
       // Dynamic section name in message

@@ -32,7 +32,7 @@ The update command SHALL handle file updates in a predictable and safe manner.
 - **AND** if a root-level stub exists, update the managed block content so it keeps directing teammates to `@/openspec/AGENTS.md`
 
 ### Requirement: Tool-Agnostic Updates
-The update command SHALL refresh OpenSpec-managed files in a predictable manner while respecting each team's chosen tooling.
+The update command SHALL refresh OpenSpec-managed files predictably while respecting each team's chosen tooling and configured specs path.
 
 #### Scenario: Updating files
 - **WHEN** updating files
@@ -40,6 +40,16 @@ The update command SHALL refresh OpenSpec-managed files in a predictable manner 
 - **AND** create or refresh the root-level `AGENTS.md` stub using the managed marker block, even if the file was previously absent
 - **AND** update only the OpenSpec-managed sections inside existing AI tool files, leaving user-authored content untouched
 - **AND** avoid creating new native-tool configuration files (slash commands, CLAUDE.md, etc.) unless they already exist
+
+#### Scenario: Placeholder replacement in skill files
+- **WHEN** generating skill files during update
+- **AND** project config has `specsPath: docs/specs`
+- **THEN** replace `{{specsPath}}` placeholders with `docs/specs` in all generated content
+
+#### Scenario: Default specsPath in skill files
+- **WHEN** generating skill files during update
+- **AND** project config does not have `specsPath`
+- **THEN** replace `{{specsPath}}` placeholders with `openspec/specs`
 
 ### Requirement: Core Files Always Updated
 The update command SHALL always update the core OpenSpec files and display an ASCII-safe success message.
@@ -165,6 +175,25 @@ The archive slash command template SHALL support optional change ID arguments fo
 - **THEN** include the `$ARGUMENTS` placeholder in the frontmatter
 - **AND** wrap it in a clear structure like `<ChangeId>\n  $ARGUMENTS\n</ChangeId>` to indicate the expected argument
 - **AND** include validation steps in the template body to check if the change ID is valid
+
+### Requirement: Specs Path Placeholder Replacement
+
+The update command SHALL replace `{{specsPath}}` placeholders in skill templates with the configured specs path.
+
+#### Scenario: Transform skill instructions with specsPath
+- **WHEN** generating skill content from templates
+- **THEN** the system SHALL compose placeholder replacement with any existing transformers
+- **AND** use the `relativePosix` format for the specsPath value
+
+#### Scenario: Placeholder in proposal skill
+- **WHEN** the proposal skill template contains `{{specsPath}}`
+- **AND** project config has `specsPath: contracts/api`
+- **THEN** the generated skill file SHALL contain `contracts/api`
+
+#### Scenario: Placeholder in archive skill
+- **WHEN** the archive skill template contains `{{specsPath}}`
+- **AND** project config has `specsPath: docs/specs`
+- **THEN** the generated skill file SHALL contain `docs/specs`
 
 ## Edge Cases
 

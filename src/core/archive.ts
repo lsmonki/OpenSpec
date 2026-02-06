@@ -10,6 +10,8 @@ import {
   type SpecUpdate,
 } from './specs-apply.js';
 import { findAllSpecs } from '../utils/spec-discovery.js';
+import { resolveSpecsPaths } from '../utils/specs-path.js';
+import { readProjectConfig } from './project-config.js';
 
 /**
  * Recursively copy a directory. Used when fs.rename fails (e.g. EPERM on Windows).
@@ -56,7 +58,9 @@ export class ArchiveCommand {
     const targetPath = '.';
     const changesDir = path.join(targetPath, 'openspec', 'changes');
     const archiveDir = path.join(changesDir, 'archive');
-    const mainSpecsDir = path.join(targetPath, 'openspec', 'specs');
+    const projectConfig = readProjectConfig(targetPath);
+    const specsPaths = resolveSpecsPaths(targetPath, projectConfig?.specsPath);
+    const mainSpecsDir = specsPaths.absolute;
 
     // Check if changes directory exists
     try {

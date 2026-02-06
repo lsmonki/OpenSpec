@@ -24,6 +24,20 @@ export const ProjectConfigSchema = z.object({
     .min(1)
     .describe('The workflow schema to use (e.g., "spec-driven")'),
 
+  // Optional: path to specs directory, relative to project root
+  specsPath: z
+    .string()
+    .min(1)
+    .optional()
+    .describe('Path to specs directory, relative to project root. Default: openspec/specs'),
+
+  // Optional: allow specsPath to point outside the project root
+  allowExternalPaths: z
+    .boolean()
+    .optional()
+    .default(false)
+    .describe('Allow specsPath to point outside project root. Default: false'),
+
   // Optional: project context (injected into all artifact instructions)
   // Max size: 50KB (enforced during parsing)
   context: z
@@ -103,6 +117,28 @@ export function readProjectConfig(projectRoot: string): ProjectConfig | null {
       config.schema = schemaResult.data;
     } else if (raw.schema !== undefined) {
       console.warn(`Invalid 'schema' field in config (must be non-empty string)`);
+    }
+
+    // Parse specsPath field using Zod
+    if (raw.specsPath !== undefined) {
+      const specsPathField = z.string().min(1);
+      const specsPathResult = specsPathField.safeParse(raw.specsPath);
+      if (specsPathResult.success) {
+        config.specsPath = specsPathResult.data;
+      } else {
+        console.warn(`Invalid 'specsPath' field in config (must be non-empty string)`);
+      }
+    }
+
+    // Parse allowExternalPaths field using Zod
+    if (raw.allowExternalPaths !== undefined) {
+      const allowExternalField = z.boolean();
+      const allowExternalResult = allowExternalField.safeParse(raw.allowExternalPaths);
+      if (allowExternalResult.success) {
+        config.allowExternalPaths = allowExternalResult.data;
+      } else {
+        console.warn(`Invalid 'allowExternalPaths' field in config (must be boolean)`);
+      }
     }
 
     // Parse context field with size limit

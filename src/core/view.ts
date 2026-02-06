@@ -4,6 +4,8 @@ import chalk from 'chalk';
 import { getTaskProgressForChange, formatTaskStatus } from '../utils/task-progress.js';
 import { MarkdownParser } from './parsers/markdown-parser.js';
 import { findAllSpecs, isSpecStructureHierarchical } from '../utils/spec-discovery.js';
+import { resolveSpecsPaths } from '../utils/specs-path.js';
+import { readProjectConfig } from './project-config.js';
 
 export class ViewCommand {
   async execute(targetPath: string = '.'): Promise<void> {
@@ -135,7 +137,10 @@ export class ViewCommand {
     specs: Array<{ name: string; requirementCount: number }>;
     isHierarchical: boolean;
   }> {
-    const specsDir = path.join(openspecDir, 'specs');
+    const targetPath = path.dirname(openspecDir);
+    const projectConfig = readProjectConfig(targetPath);
+    const specsPaths = resolveSpecsPaths(targetPath, projectConfig?.specsPath);
+    const specsDir = specsPaths.absolute;
 
     if (!fs.existsSync(specsDir)) {
       return { specs: [], isHierarchical: false };

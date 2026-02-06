@@ -9,6 +9,7 @@ import { readProjectConfig } from '../core/project-config.js';
 import { nearestMatches } from '../utils/match.js';
 import { resolveSchema } from '../core/artifact-graph/resolver.js';
 import type { SchemaYaml } from '../core/artifact-graph/types.js';
+import { resolveSpecsPaths } from '../utils/specs-path.js';
 
 type ItemType = 'change' | 'spec';
 
@@ -17,8 +18,9 @@ type ItemType = 'change' | 'spec';
  * Supports both flat and hierarchical spec structures.
  */
 function getSpecCapabilities(): string[] {
-  const specsDir = path.join(process.cwd(), 'openspec', 'specs');
-  const discovered = findAllSpecs(specsDir);
+  const projectConfig = readProjectConfig(process.cwd());
+  const specsPaths = resolveSpecsPaths(process.cwd(), projectConfig?.specsPath);
+  const discovered = findAllSpecs(specsPaths.absolute);
   return discovered.map(spec => spec.capability);
 }
 
@@ -194,7 +196,9 @@ export class ValidateCommand {
       process.exitCode = report.valid ? 0 : 1;
       return;
     }
-    const file = path.join(projectRoot, 'openspec', 'specs', id, 'spec.md');
+    const projectConfig = readProjectConfig(projectRoot);
+    const specsPaths = resolveSpecsPaths(projectRoot, projectConfig?.specsPath);
+    const file = path.join(specsPaths.absolute, id, 'spec.md');
     const start = Date.now();
     const report = await validator.validateSpec(file, validationConfig);
     const durationMs = Date.now() - start;
@@ -241,8 +245,9 @@ export class ValidateCommand {
     const projectRoot = process.cwd();
 
     // Discover specs once and reuse for both capability list and structure validation
-    const specsDir = path.join(projectRoot, 'openspec', 'specs');
-    const discoveredSpecs = scope.specs ? findAllSpecs(specsDir) : [];
+    const bulkProjectConfig = readProjectConfig(projectRoot);
+    const bulkSpecsPaths = resolveSpecsPaths(projectRoot, bulkProjectConfig?.specsPath);
+    const discoveredSpecs = scope.specs ? findAllSpecs(bulkSpecsPaths.absolute) : [];
     const specIds = discoveredSpecs.map(s => s.capability);
 
     const changeIds = scope.changes ? await getActiveChangeIds() : [];
@@ -273,7 +278,7 @@ export class ValidateCommand {
     for (const id of specIds) {
       queue.push(async () => {
         const start = Date.now();
-        const file = path.join(projectRoot, 'openspec', 'specs', id, 'spec.md');
+        const file = path.join(bulkSpecsPaths.absolute, id, 'spec.md');
         const report = await validator.validateSpec(file, validationConfig);
         const durationMs = Date.now() - start;
         return { id, type: 'spec' as const, valid: report.valid, issues: report.issues, durationMs };

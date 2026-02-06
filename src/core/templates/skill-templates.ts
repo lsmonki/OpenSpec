@@ -851,7 +851,7 @@ This is an **agent-driven** operation - you will read delta specs and directly e
 
    a. **Read the delta spec** to understand the intended changes
 
-   b. **Read the main spec** at \`openspec/specs/<capability-path>/spec.md\` (may not exist yet)
+   b. **Read the main spec** at \`{{specsPath}}/<capability-path>/spec.md\` (may not exist yet)
 
    c. **Apply changes intelligently**:
 
@@ -874,7 +874,7 @@ This is an **agent-driven** operation - you will read delta specs and directly e
       - Find the FROM requirement, rename to TO
 
    d. **Create new main spec** if capability doesn't exist yet:
-      - Create \`openspec/specs/<capability-path>/spec.md\`
+      - Create \`{{specsPath}}/<capability-path>/spec.md\`
       - Add Purpose section (can be brief, mark as TBD)
       - Add Requirements section with the ADDED requirements
 
@@ -2229,7 +2229,7 @@ export function getArchiveChangeSkillTemplate(): SkillTemplate {
    Check for delta specs at \`openspec/changes/<name>/specs/\`. If none exist, proceed without sync prompt.
 
    **If delta specs exist:**
-   - Compare each delta spec with its corresponding main spec at \`openspec/specs/<capability-path>/spec.md\`
+   - Compare each delta spec with its corresponding main spec at \`{{specsPath}}/<capability-path>/spec.md\`
    - Determine what changes would be applied (adds, modifications, removals, renames)
    - Show a combined summary before prompting
 
@@ -2589,7 +2589,7 @@ This is an **agent-driven** operation - you will read delta specs and directly e
 
    a. **Read the delta spec** to understand the intended changes
 
-   b. **Read the main spec** at \`openspec/specs/<capability-path>/spec.md\` (may not exist yet)
+   b. **Read the main spec** at \`{{specsPath}}/<capability-path>/spec.md\` (may not exist yet)
 
    c. **Apply changes intelligently**:
 
@@ -2612,7 +2612,7 @@ This is an **agent-driven** operation - you will read delta specs and directly e
       - Find the FROM requirement, rename to TO
 
    d. **Create new main spec** if capability doesn't exist yet:
-      - Create \`openspec/specs/<capability-path>/spec.md\`
+      - Create \`{{specsPath}}/<capability-path>/spec.md\`
       - Add Purpose section (can be brief, mark as TBD)
       - Add Requirements section with the ADDED requirements
 
@@ -2916,7 +2916,7 @@ export function getOpsxArchiveCommandTemplate(): CommandTemplate {
    Check for delta specs at \`openspec/changes/<name>/specs/\`. If none exist, proceed without sync prompt.
 
    **If delta specs exist:**
-   - Compare each delta spec with its corresponding main spec at \`openspec/specs/<capability-path>/spec.md\`
+   - Compare each delta spec with its corresponding main spec at \`{{specsPath}}/<capability-path>/spec.md\`
    - Determine what changes would be applied (adds, modifications, removals, renames)
    - Show a combined summary before prompting
 

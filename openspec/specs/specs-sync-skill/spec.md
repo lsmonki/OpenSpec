@@ -2,16 +2,14 @@
 
 ## Purpose
 Defines the agent skill for syncing delta specs from changes to main specs.
-
 ## Requirements
-
 ### Requirement: Specs Sync Skill
-The system SHALL provide an `/opsx:sync` skill that syncs delta specs from a change to the main specs.
+The system SHALL provide an `/opsx:sync` skill that syncs delta specs from a change to the main specs, using the configured specs path.
 
 #### Scenario: Sync delta specs to main specs
 - **WHEN** agent executes `/opsx:sync` with a change name
 - **THEN** the agent reads delta specs from `openspec/changes/<name>/specs/`
-- **AND** reads corresponding main specs from `openspec/specs/`
+- **AND** reads corresponding main specs from the configured `specsPath` (default: `openspec/specs/`)
 - **AND** reconciles main specs to match what the deltas describe
 
 #### Scenario: Idempotent operation
@@ -25,12 +23,12 @@ The system SHALL provide an `/opsx:sync` skill that syncs delta specs from a cha
 - **AND** shows changes that have delta specs
 
 ### Requirement: Delta Reconciliation Logic
-The agent SHALL reconcile main specs with delta specs using the delta operation headers.
+The agent SHALL reconcile main specs with delta specs using the delta operation headers and the configured specs path.
 
 #### Scenario: ADDED requirements
 - **WHEN** delta contains `## ADDED Requirements` with a requirement
 - **AND** the requirement does not exist in main spec
-- **THEN** add the requirement to main spec
+- **THEN** add the requirement to main spec at the configured `specsPath`
 
 #### Scenario: ADDED requirement already exists
 - **WHEN** delta contains `## ADDED Requirements` with a requirement
@@ -54,7 +52,7 @@ The agent SHALL reconcile main specs with delta specs using the delta operation 
 
 #### Scenario: New capability spec
 - **WHEN** delta spec exists for a capability not in main specs
-- **THEN** create new main spec file at `openspec/specs/<capability>/spec.md`
+- **THEN** create new main spec file at `<specsPath>/<capability-path>/spec.md`
 
 ### Requirement: Skill Output
 The skill SHALL provide clear feedback on what was applied.
@@ -70,3 +68,4 @@ The skill SHALL provide clear feedback on what was applied.
 #### Scenario: No changes needed
 - **WHEN** main specs already match delta specs
 - **THEN** display "Specs already in sync - no changes needed"
+
