@@ -73,8 +73,9 @@ function loadProjectValidationConfig(projectRoot: string): SpecValidationConfig 
 
     const schema = resolveSchema(config.schema, projectRoot);
     return buildValidationConfig(schema);
-  } catch {
-    // If schema loading fails, use defaults
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.warn(`Warning: Failed to load schema '${readProjectConfig(projectRoot)?.schema}': ${msg}. Using default validation config.`);
     return undefined;
   }
 }
