@@ -328,27 +328,28 @@ export function generateInstructions(
   const builtIn = isBuiltInSchema(context.schemaName);
   const schemaDir = getSchemaDir(context.schemaName, effectiveProjectRoot);
 
-  // Apply placeholder replacement and legacy path handling to instruction
+  // Apply legacy path handling then placeholder replacement to instruction
+  // Legacy replacement must run first to avoid double-replacing when specsPath contains 'openspec/specs'
   let processedInstruction = artifact.instruction;
   if (processedInstruction) {
-    processedInstruction = replacePlaceholders(processedInstruction, placeholders);
     processedInstruction = replaceLegacySpecsPath(
       processedInstruction,
       specsPaths.relativePosix,
       builtIn,
       schemaDir ? path.join(schemaDir, 'schema.yaml') : undefined
     );
+    processedInstruction = replacePlaceholders(processedInstruction, placeholders);
   }
 
-  // Apply placeholder replacement and legacy path handling to template
+  // Apply legacy path handling then placeholder replacement to template
   let processedTemplate = templateContent;
-  processedTemplate = replacePlaceholders(processedTemplate, placeholders);
   processedTemplate = replaceLegacySpecsPath(
     processedTemplate,
     specsPaths.relativePosix,
     builtIn,
     schemaDir ? path.join(schemaDir, 'templates', artifact.template) : undefined
   );
+  processedTemplate = replacePlaceholders(processedTemplate, placeholders);
 
   return {
     changeName: context.changeName,
