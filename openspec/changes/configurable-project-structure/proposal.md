@@ -22,7 +22,7 @@ This effectively makes the `openspec/` directory optional — you can have every
 
 Move configuration from `openspec/config.yaml` to project root (as suggested in #581):
 
-```
+```text
 BEFORE                          AFTER
 ──────                          ─────
 repo/                           repo/
@@ -78,7 +78,7 @@ Extend the existing `{{specsPath}}` pattern to all configurable paths:
 
 ### 4. Config Loading with Local Override
 
-```
+```text
 Priority (highest to lowest):
 1. openspec.config.local.yaml  (developer overrides, gitignored)
 2. openspec.config.yaml        (project config, committed)
@@ -164,7 +164,7 @@ archivePath: ../shared-archive/my-project
 
 **Single config at root (supported):**
 
-```
+```text
 monorepo/
 ├── openspec.config.yaml      ← Single config
 ├── .claude/skills/           ← Skills here
@@ -179,7 +179,7 @@ This works because AI tools find skills at the git root.
 
 **Per-package configs (NOT supported in this proposal):**
 
-```
+```text
 monorepo/
 ├── packages/
 │   ├── api/
