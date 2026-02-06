@@ -59,7 +59,7 @@ export function parseSchema(yamlContent: string): SchemaYaml {
  */
 function validatePatternPlaceholders(schema: SchemaYaml): void {
   // Check specValidation.pattern
-  if (schema.specValidation?.pattern && !schema.specValidation.pattern.includes('{name}')) {
+  if (schema.specValidation?.pattern !== undefined && !schema.specValidation.pattern.includes('{name}')) {
     throw new SchemaValidationError(
       `specValidation.pattern must include {name} placeholder, got: "${schema.specValidation.pattern}"`
     );
@@ -68,7 +68,7 @@ function validatePatternPlaceholders(schema: SchemaYaml): void {
   // Check artifact sections.requirement.pattern
   for (const artifact of schema.artifacts) {
     const pattern = artifact.sections?.requirement?.pattern;
-    if (pattern && !pattern.includes('{name}')) {
+    if (pattern !== undefined && !pattern.includes('{name}')) {
       throw new SchemaValidationError(
         `Artifact '${artifact.id}' sections.requirement.pattern must include {name} placeholder, got: "${pattern}"`
       );

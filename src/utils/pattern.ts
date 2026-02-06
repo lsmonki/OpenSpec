@@ -16,6 +16,10 @@
  * // Returns: /^## RF-(.+):$/
  */
 export function patternToRegex(pattern: string): RegExp {
+  if (!pattern.includes('{name}')) {
+    console.warn(`Warning: Pattern "${pattern}" is missing {name} placeholder — matching will not capture names.`);
+  }
+
   // Escape regex special characters except {name}
   const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, match => {
     // Don't escape the braces in {name}
