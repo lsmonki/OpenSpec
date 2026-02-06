@@ -628,13 +628,7 @@ export class Validator {
    * The pattern is a regex string (e.g., "SHALL|MUST" or "(?i)shall|must").
    */
   private matchesNormativePattern(text: string, pattern: string): boolean {
-    // Guard against overly complex patterns from user config
-    if (pattern.length > 200) {
-      return text.includes(pattern);
-    }
     try {
-      // Validate that the pattern compiles before interpolating
-      new RegExp(pattern);
       const regex = new RegExp(`\\b(${pattern})\\b`);
       return regex.test(text);
     } catch {
