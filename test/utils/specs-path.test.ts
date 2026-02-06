@@ -1,6 +1,13 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import path from 'path';
+
+// Mock validateConfigPath to avoid filesystem reads in unit tests
+vi.mock('../../src/utils/path-validation.js', () => ({
+  validateConfigPath: vi.fn(),
+}));
+
 import { resolveSpecsPaths, DEFAULT_SPECS_PATH } from '../../src/utils/specs-path.js';
+import { validateConfigPath } from '../../src/utils/path-validation.js';
 
 describe('resolveSpecsPaths', () => {
   describe('default behavior', () => {
@@ -69,12 +76,16 @@ describe('resolveSpecsPaths', () => {
   });
 
   describe('edge cases', () => {
-    it('should handle empty string specsPath by using default', () => {
-      // Note: empty string should be rejected by config validation,
-      // but if it somehow gets through, we use it as-is (results in empty segments)
+    it('should treat empty string specsPath as default', () => {
       const result = resolveSpecsPaths('/project', '');
-      // Empty string splits to [''] which filters to []
-      expect(result.relativePosix).toBe('');
+      expect(result.relativePosix).toBe(DEFAULT_SPECS_PATH);
+      expect(result.relative).toBe(path.join('openspec', 'specs'));
+    });
+
+    it('should treat whitespace-only specsPath as default', () => {
+      const result = resolveSpecsPaths('/project', '   ');
+      expect(result.relativePosix).toBe(DEFAULT_SPECS_PATH);
+      expect(result.relative).toBe(path.join('openspec', 'specs'));
     });
 
     it('should handle leading separator in specsPath', () => {
@@ -87,6 +98,41 @@ describe('resolveSpecsPaths', () => {
       const result = resolveSpecsPaths('/project', 'docs/specs/');
       // Trailing slash creates empty last segment which gets filtered
       expect(result.relativePosix).toBe('docs/specs');
+    });
+  });
+
+  describe('path validation integration', () => {
+    it('should call validateConfigPath with correct arguments', () => {
+      const mockValidate = vi.mocked(validateConfigPath);
+      mockValidate.mockClear();
+
+      resolveSpecsPaths('/project', 'docs/specs');
+
+      expect(mockValidate).toHaveBeenCalledOnce();
+      expect(mockValidate).toHaveBeenCalledWith(
+        path.resolve('/project', 'docs', 'specs'),
+        '/project',
+        {
+          fieldName: 'specsPath',
+          rawSegments: ['docs', 'specs'],
+        }
+      );
+    });
+
+    it('should call validateConfigPath with default path segments when specsPath is undefined', () => {
+      const mockValidate = vi.mocked(validateConfigPath);
+      mockValidate.mockClear();
+
+      resolveSpecsPaths('/project');
+
+      expect(mockValidate).toHaveBeenCalledWith(
+        expect.any(String),
+        '/project',
+        {
+          fieldName: 'specsPath',
+          rawSegments: ['openspec', 'specs'],
+        }
+      );
     });
   });
 });

@@ -1,5 +1,6 @@
 import path from 'path';
 import type { TextTransformer } from './command-references.js';
+import { validateConfigPath } from './path-validation.js';
 
 /**
  * Represents resolved specs path in three formats for different contexts.
@@ -43,16 +44,25 @@ export const DEFAULT_SPECS_PATH = 'openspec/specs';
  * // Returns: { absolute: 'C:\\Users\\user\\project\\docs\\specs', relative: 'docs\\specs', relativePosix: 'docs/specs' }
  */
 export function resolveSpecsPaths(projectRoot: string, specsPath?: string): SpecsPaths {
-  // Use default if not provided
-  const raw = specsPath ?? DEFAULT_SPECS_PATH;
+  // Normalize empty/whitespace to default
+  const trimmed = specsPath?.trim();
+  const raw = trimmed || DEFAULT_SPECS_PATH;
 
   // Split on both separators to handle cross-platform input
   const segments = raw.split(/[/\\]/).filter(Boolean);
 
+  const absolute = path.resolve(projectRoot, ...segments);
+
+  // Validate path security (reads allowExternalPaths from config internally)
+  validateConfigPath(absolute, projectRoot, {
+    fieldName: 'specsPath',
+    rawSegments: segments,
+  });
+
   return {
-    absolute: path.resolve(projectRoot, ...segments),
-    relative: path.join(...segments),
-    relativePosix: segments.join('/'),
+    absolute,
+    relative: segments.length > 0 ? path.join(...segments) : '.',
+    relativePosix: segments.length > 0 ? segments.join('/') : '.',
   };
 }
 

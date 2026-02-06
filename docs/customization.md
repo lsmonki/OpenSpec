@@ -126,6 +126,57 @@ openspec update
 
 This updates the AI skill templates with your configured specs path. Without this step, AI instructions will still reference the old location.
 
+### External Paths (Monorepos)
+
+By default, `specsPath` must resolve inside your project root. If you need to point to a shared specs directory outside the project (e.g., in a monorepo), set `allowExternalPaths: true`:
+
+```yaml
+# openspec/config.yaml
+schema: spec-driven
+specsPath: ../../shared/specs
+allowExternalPaths: true
+```
+
+**Example monorepo structure:**
+
+```text
+company/
+├── shared/
+│   └── specs/              # Shared specs
+├── team-a/
+│   └── project/            # Your project
+│       └── openspec/
+│           └── config.yaml # specsPath: ../../shared/specs
+└── team-b/
+    └── project/
+```
+
+**Security behavior:**
+
+- **Without `allowExternalPaths`** (default): external paths produce an error with a message suggesting the flag
+- **With `allowExternalPaths: true`**: external paths work with a one-time warning per CLI invocation
+
+### Security Restrictions
+
+The following restrictions always apply, regardless of `allowExternalPaths`:
+
+**System directory protection** — Paths resolving into protected OS directories are always blocked:
+- **Linux**: `/etc`, `/usr`, `/bin`, `/sbin`, `/boot`, `/proc`, `/sys`, `/dev`, `/root`
+- **macOS**: `/System`, `/Library`, `/Applications` (plus Linux paths)
+- **Windows**: `C:\Windows`, `C:\Program Files`, `C:\Program Files (x86)`, `C:\ProgramData`
+
+**Parent traversal limit** — Paths with more than 3 `..` segments are always blocked:
+
+```yaml
+# OK (1-3 levels up)
+specsPath: ../shared-specs
+specsPath: ../../team-shared/specs
+specsPath: ../../../org-wide/specs
+
+# Blocked (4+ levels up)
+specsPath: ../../../../too-far/specs
+```
+
 ### Using specsPath in Custom Schemas
 
 When creating custom schemas, use the `{{specsPath}}` placeholder instead of hardcoding paths. This ensures your schema works correctly regardless of the project's configured specs location.
