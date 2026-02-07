@@ -53,15 +53,15 @@ function buildValidationConfig(schema: SchemaYaml): SpecValidationConfig {
  * Returns undefined if no config or schema found (uses defaults).
  */
 function loadProjectValidationConfig(projectRoot: string): SpecValidationConfig | undefined {
-  try {
-    const config = readProjectConfig(projectRoot);
-    if (!config?.schema) return undefined;
+  const config = readProjectConfig(projectRoot);
+  if (!config?.schema) return undefined;
 
+  try {
     const schema = resolveSchema(config.schema, projectRoot);
     return buildValidationConfig(schema);
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    console.warn(`Warning: Failed to load schema '${readProjectConfig(projectRoot)?.schema}': ${msg}. Using default validation config.`);
+    console.warn(`Warning: Failed to load schema '${config.schema}': ${msg}. Using default validation config.`);
     return undefined;
   }
 }
