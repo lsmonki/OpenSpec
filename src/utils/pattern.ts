@@ -48,7 +48,10 @@ export function patternToRegex(pattern: string): RegExp {
  * // Returns: "User login"
  */
 export function extractNameFromPattern(text: string, pattern: string): string | null {
+  if (!pattern.includes('{name}')) {
+    return null;
+  }
   const regex = patternToRegex(pattern);
   const match = text.match(regex);
-  return match ? match[1] : null;
+  return match?.[1] ?? null;
 }
