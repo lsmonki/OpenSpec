@@ -624,7 +624,7 @@ export class Validator {
 
   /**
    * Check if text matches the normative keyword pattern.
-   * The pattern is a regex string (e.g., "SHALL|MUST" or "(?i)shall|must").
+   * The pattern is a JavaScript RegExp string (e.g., "SHALL|MUST" or "[Ss]hall|[Mm]ust").
    */
   private matchesNormativePattern(text: string, pattern: string): boolean {
     try {
