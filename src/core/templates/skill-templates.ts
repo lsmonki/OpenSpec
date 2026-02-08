@@ -799,7 +799,7 @@ This is an **agent-driven** operation - you will read delta specs and directly e
 
    Look for delta spec files in \`openspec/changes/<name>/specs/*/spec.md\`.
 
-   Read \`openspec/schema.yaml\` for format configuration (if it exists). Key fields:
+   Read \`openspec/schemas/<schema-name>/schema.yaml\` for format configuration (if it exists). Key fields:
    - \`sections.requirement.section\`: Section name (default: \`Requirements\`)
    - \`sections.requirement.pattern\`: Requirement header pattern (default: \`### Requirement: {name}\`)
    - \`specValidation.pattern\`: Scenario pattern (default: \`#### Scenario: {name}\`)
@@ -880,7 +880,7 @@ The system SHALL do something new.
 - TO: \`### Requirement: New Name\`
 \`\`\`
 
-**Note:** The section name ("Requirements") and header patterns are configurable via schema.yaml. Check \`sections.requirement\` for actual patterns.
+**Note:** The section name ("Requirements") and header patterns are configurable via the project's schema.yaml. Check \`sections.requirement\` for actual patterns.
 
 **Key Principle: Intelligent Merging**
 
@@ -2504,7 +2504,7 @@ This is an **agent-driven** operation - you will read delta specs and directly e
 
    Look for delta spec files in \`openspec/changes/<name>/specs/*/spec.md\`.
 
-   Read \`openspec/schema.yaml\` for format configuration (if it exists). Key fields:
+   Read \`openspec/schemas/<schema-name>/schema.yaml\` for format configuration (if it exists). Key fields:
    - \`sections.requirement.section\`: Section name (default: \`Requirements\`)
    - \`sections.requirement.pattern\`: Requirement header pattern (default: \`### Requirement: {name}\`)
    - \`specValidation.pattern\`: Scenario pattern (default: \`#### Scenario: {name}\`)
@@ -2585,7 +2585,7 @@ The system SHALL do something new.
 - TO: \`### Requirement: New Name\`
 \`\`\`
 
-**Note:** The section name ("Requirements") and header patterns are configurable via schema.yaml. Check \`sections.requirement\` for actual patterns.
+**Note:** The section name ("Requirements") and header patterns are configurable via the project's schema.yaml. Check \`sections.requirement\` for actual patterns.
 
 **Key Principle: Intelligent Merging**
 
@@ -2682,7 +2682,7 @@ export function getVerifyChangeSkillTemplate(): SkillTemplate {
 
    **Spec Coverage**:
    - If delta specs exist in \`openspec/changes/<name>/specs/\`:
-     - Read schema format config from \`openspec/schema.yaml\` or use defaults:
+     - Read schema format config from \`openspec/schemas/<schema-name>/schema.yaml\` or use defaults:
        - \`sections.requirement.pattern\` (default: \`### Requirement: {name}\`)
        - \`specValidation.pattern\` (default: \`#### Scenario: {name}\`)
      - Extract all requirements using the configured pattern
@@ -3280,7 +3280,7 @@ export function getOpsxVerifyCommandTemplate(): CommandTemplate {
 
    **Spec Coverage**:
    - If delta specs exist in \`openspec/changes/<name>/specs/\`:
-     - Read schema format config from \`openspec/schema.yaml\` or use defaults:
+     - Read schema format config from \`openspec/schemas/<schema-name>/schema.yaml\` or use defaults:
        - \`sections.requirement.pattern\` (default: \`### Requirement: {name}\`)
        - \`specValidation.pattern\` (default: \`#### Scenario: {name}\`)
      - Extract all requirements using the configured pattern
