@@ -26,6 +26,10 @@ OpenSpec should adapt to existing spec formats, not impose its own.
 
 ## Capabilities
 
+### New Capabilities
+
+- **docs-configurable-spec-format**: Document how to configure custom spec formats in schemas
+
 ### Modified Capabilities
 
 - **artifact-graph**: Extend artifact schema with new optional fields for spec structure configuration

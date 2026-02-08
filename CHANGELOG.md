@@ -37,6 +37,14 @@
 
 - **`{{specsPath}}` placeholder for custom schemas** — Schema authors can use `{{specsPath}}` in instructions and templates to reference the project's configured specs directory. This ensures custom schemas work correctly regardless of where specs are stored.
 
+- **Configurable spec formats** — Schemas can now define custom requirement patterns, section headers, scenario formats, and normative keyword validation. New schema fields:
+  - `specValidation.pattern`: Custom scenario header pattern (e.g., `### Scenario: {name}`)
+  - `specValidation.required`: Make scenarios optional
+  - `specValidation.artifact`: Put scenarios in separate files (e.g., verify.md)
+  - `specValidation.shallMustPattern`: Custom normative keywords (e.g., `DEBE|DEBERÁ` for Spanish) or `null` to disable
+  - `sections.required/optional`: Configure required and optional section headers
+  - `sections.requirement.pattern`: Custom requirement header pattern (e.g., `### Req: {name}`)
+
 ### Improvements
 
 - **Cross-platform path support** — The `specsPath` config accepts both forward slashes (`/`) and backslashes (`\`), automatically normalizing for the current operating system.
