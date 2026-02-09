@@ -30,7 +30,12 @@ export interface HooksOutput {
 
 // -----------------------------------------------------------------------------
 // Command
-// -----------------------------------------------------------------------------
+/**
+ * Retrieve and display resolved hooks for a lifecycle point, merging schema and config hooks.
+ *
+ * @param lifecyclePoint - The lifecycle point to query (must be one of VALID_LIFECYCLE_POINTS).
+ * @param options - Command options. If `change` is provided, resolve hooks for that change; if `json` is `true`, print machine-readable JSON instead of human-readable output.
+ */
 
 export async function hooksCommand(
   lifecyclePoint: string | undefined,
@@ -85,6 +90,11 @@ export async function hooksCommand(
   }
 }
 
+/**
+ * Prints a human-readable listing of resolved hooks for a lifecycle point to the console.
+ *
+ * @param output - Contains `lifecyclePoint`, `changeName` (or `null` for project-wide), and `hooks`; prints a header showing the lifecycle point and context, prints "No hooks defined for this lifecycle point." if none, or prints sections labeled "From schema" or "From config" followed by each hook's instruction.
+ */
 function printHooksText(output: HooksOutput): void {
   const { lifecyclePoint, changeName, hooks } = output;
 

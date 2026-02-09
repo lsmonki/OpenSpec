@@ -310,10 +310,9 @@ function getUnlockedArtifacts(graph: ArtifactGraph, artifactId: string): string[
 }
 
 /**
- * Formats the status of all artifacts in a change.
+ * Produce a ChangeStatus that describes overall progress and per-artifact state for the change.
  *
- * @param context - Change context
- * @returns Formatted change status
+ * @returns A ChangeStatus object containing the change name and schema, whether the change is complete, the list of artifacts required before apply, and an array of artifact statuses where each artifact is `done`, `ready`, or `blocked` (blocked entries include `missingDeps`).
  */
 export function formatChangeStatus(context: ChangeContext): ChangeStatus {
   // Load schema to get apply phase configuration
@@ -378,16 +377,17 @@ export interface ResolvedHook {
 }
 
 /**
- * Resolves lifecycle hooks for a given lifecycle point.
+ * Resolve lifecycle hooks for a specific lifecycle point, returning them in execution order.
  *
  * Resolution order:
  * 1. Schema hooks (from the change's schema, or from config.yaml's default schema)
  * 2. Config hooks (from project config.yaml)
  *
  * @param projectRoot - Project root directory
- * @param changeName - Change name (null = resolve schema from config.yaml)
+ * @param changeName - Change name; if `null`, resolve schema from config.yaml's `schema` value
  * @param lifecyclePoint - The lifecycle point to resolve hooks for
- * @returns Array of resolved hooks in execution order (schema first, config second)
+ * @returns An array of resolved hooks in execution order (schema first, then config)
+ * @throws Error if `lifecyclePoint` is not one of the valid lifecycle points
  */
 export function resolveHooks(
   projectRoot: string,

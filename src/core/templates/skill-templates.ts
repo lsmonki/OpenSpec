@@ -311,8 +311,18 @@ But this summary is optional. Sometimes the thinking IS the value.
 }
 
 /**
- * Template for openspec-new-change skill
- * Based on /opsx:new command
+ * Create a SkillTemplate for the "openspec-new-change" skill.
+ *
+ * The template guides a user through starting a new OpenSpec change using the
+ * experimental artifact-driven workflow. Its instructions cover collecting or
+ * deriving a kebab-case change name, selecting or defaulting the workflow
+ * schema, running pre-new and post-new lifecycle hooks, creating the change
+ * scaffold with the openspec CLI, showing artifact status, and retrieving the
+ * template for the first artifact — stopping before any artifact is created.
+ * Guardrails enforce name validation, avoidance of artifact creation, and
+ * handling of existing changes.
+ *
+ * @returns A SkillTemplate configured for the "openspec-new-change" skill.
  */
 export function getNewChangeSkillTemplate(): SkillTemplate {
   return {
@@ -525,8 +535,18 @@ For other schemas, follow the \`instruction\` field from the CLI output.
 }
 
 /**
- * Template for openspec-apply-change skill
- * For implementing tasks from a completed (or in-progress) change
+ * Create a SkillTemplate for applying (implementing) tasks from an OpenSpec change.
+ *
+ * The template guides an agent through selecting a change, executing lifecycle hooks,
+ * obtaining apply instructions and context files from the openspec CLI, iterating and
+ * implementing pending tasks while pausing for blockers or clarification, and reporting
+ * progress and completion. It enforces guardrails such as reading context files before
+ * implementation, keeping changes minimal and scoped, updating task checkboxes as tasks
+ * complete, and running pre/post hooks when present.
+ *
+ * @returns A SkillTemplate named "openspec-apply-change" that encapsulates the apply-workflow,
+ *          including hooks execution, status/instructions retrieval, task implementation loop,
+ *          progress reporting, and pause/complete behaviors.
  */
 export function getApplyChangeSkillTemplate(): SkillTemplate {
   return {
@@ -804,8 +824,16 @@ After completing all artifacts, summarize:
 }
 
 /**
- * Template for openspec-sync-specs skill
- * For syncing delta specs from a change to main specs (agent-driven)
+ * Create the SkillTemplate for syncing delta specs from a change into the repository's main specs.
+ *
+ * The skill performs an agent-driven, intelligent merge of delta spec files from a specified change
+ * into the main specs, applying additions, modifications, removals, and renames while preserving
+ * existing content not referenced by the delta. It prompts to select a change when ambiguous,
+ * runs configured lifecycle hooks (pre-sync and post-sync) if present, and summarizes the capability-
+ * level updates performed.
+ *
+ * @returns A SkillTemplate configured for the "openspec-sync-specs" skill (metadata, instructions,
+ *          license, and compatibility info included).
  */
 export function getSyncSpecsSkillTemplate(): SkillTemplate {
   return {
@@ -1701,7 +1729,11 @@ When things crystallize, you might offer a summary - but it's optional. Sometime
 }
 
 /**
- * Template for /opsx:new slash command
+ * Command template for the /opsx:new slash command that guides a user through starting a new change using the experimental artifact-driven workflow.
+ *
+ * The template instructs how to derive a kebab-case change name from user input (or prompt for it), choose or default the workflow schema, run pre-new and post-new lifecycle hooks, create the change scaffold, show artifact status, and fetch the instructions for the first artifact — then stop and wait for user direction. It also documents guardrails (do not create artifacts yet, validate kebab-case, suggest /opsx:continue if the change exists) and the exact openspec CLI commands to run at each step.
+ *
+ * @returns The populated CommandTemplate for the /opsx:new command.
  */
 export function getOpsxNewCommandTemplate(): CommandTemplate {
   return {
@@ -1910,7 +1942,13 @@ For other schemas, follow the \`instruction\` field from the CLI output.
 }
 
 /**
- * Template for /opsx:apply slash command
+ * Create a CommandTemplate for the /opsx:apply slash command that guides implementing tasks from an OpenSpec change.
+ *
+ * The template instructs selecting a change, running lifecycle hooks, retrieving apply instructions and context files,
+ * iterating through pending tasks with progress updates, handling blockers or pauses, running post-apply hooks, and
+ * presenting session and overall status outputs.
+ *
+ * @returns A CommandTemplate for the `/opsx:apply` slash command.
  */
 export function getOpsxApplyCommandTemplate(): CommandTemplate {
   return {
@@ -2567,7 +2605,11 @@ No active changes found. Use \`/opsx:new\` to create a new change.
 }
 
 /**
- * Template for /opsx:sync slash command
+ * Provide the /opsx:sync slash command template for syncing a change's delta specs into the repository's main specs.
+ *
+ * The template guides an agent-driven workflow to locate a change, run pre-sync/post-sync hooks, locate and interpret delta spec files under a change, and apply intelligent, idempotent updates to main spec files (add/modify/remove/rename requirements and scenarios). It includes selection behavior when the change name is not provided, delta spec format expectations, guardrails (read both delta and main specs, preserve unrelated content, ask for clarification), and a summary output format describing updated capabilities and changes applied.
+ *
+ * @returns A CommandTemplate describing the /opsx:sync command and its content
  */
 export function getOpsxSyncCommandTemplate(): CommandTemplate {
   return {
@@ -2893,7 +2935,11 @@ Use clear markdown with:
 }
 
 /**
- * Template for /opsx:archive slash command
+ * Provides the command template for the "/opsx:archive" slash command that guides archiving a completed change.
+ *
+ * The command guides selection of a change (prompts if ambiguous), runs pre-archive and post-archive lifecycle hooks when present, verifies artifact and task completion (with user confirmation on warnings), assesses and optionally syncs delta specs to main specs, moves the change into an archive directory using a date-prefixed name, and returns a clear summary of outcomes or errors.
+ *
+ * @returns The CommandTemplate for the /opsx:archive slash command
  */
 export function getOpsxArchiveCommandTemplate(): CommandTemplate {
   return {
