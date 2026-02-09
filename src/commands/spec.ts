@@ -12,7 +12,7 @@ import { readProjectConfig } from '../core/project-config.js';
 
 function getSpecsDir(): string {
   const config = readProjectConfig(process.cwd());
-  return resolveSpecsPaths(process.cwd(), config?.specsPath).relative;
+  return resolveSpecsPaths(process.cwd(), config?.specsPath).absolute;
 }
 
 interface ShowOptions {
