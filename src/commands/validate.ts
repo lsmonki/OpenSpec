@@ -4,6 +4,8 @@ import { Validator } from '../core/validation/validator.js';
 import { isInteractive, resolveNoInteractive } from '../utils/interactive.js';
 import { getActiveChangeIds, getSpecIds } from '../utils/item-discovery.js';
 import { nearestMatches } from '../utils/match.js';
+import { resolveSpecsPaths } from '../utils/specs-path.js';
+import { readProjectConfig } from '../core/project-config.js';
 
 type ItemType = 'change' | 'spec';
 
@@ -139,7 +141,9 @@ export class ValidateCommand {
       process.exitCode = report.valid ? 0 : 1;
       return;
     }
-    const file = path.join(process.cwd(), 'openspec', 'specs', id, 'spec.md');
+    const projectConfig = readProjectConfig(process.cwd());
+    const specsPaths = resolveSpecsPaths(process.cwd(), projectConfig?.specsPath);
+    const file = path.join(specsPaths.absolute, id, 'spec.md');
     const start = Date.now();
     const report = await validator.validateSpec(file);
     const durationMs = Date.now() - start;
@@ -203,10 +207,12 @@ export class ValidateCommand {
         return { id, type: 'change' as const, valid: report.valid, issues: report.issues, durationMs };
       });
     }
+    const bulkProjectConfig = readProjectConfig(process.cwd());
+    const bulkSpecsPaths = resolveSpecsPaths(process.cwd(), bulkProjectConfig?.specsPath);
     for (const id of specIds) {
       queue.push(async () => {
         const start = Date.now();
-        const file = path.join(process.cwd(), 'openspec', 'specs', id, 'spec.md');
+        const file = path.join(bulkSpecsPaths.absolute, id, 'spec.md');
         const report = await validator.validateSpec(file);
         const durationMs = Date.now() - start;
         return { id, type: 'spec' as const, valid: report.valid, issues: report.issues, durationMs };

@@ -248,6 +248,64 @@ rules:
         });
       });
 
+      it('should parse allowExternalPaths as true', () => {
+        const configDir = path.join(tempDir, 'openspec');
+        fs.mkdirSync(configDir, { recursive: true });
+        fs.writeFileSync(
+          path.join(configDir, 'config.yaml'),
+          `schema: spec-driven\nallowExternalPaths: true\n`
+        );
+
+        const config = readProjectConfig(tempDir);
+
+        expect(config?.allowExternalPaths).toBe(true);
+        expect(consoleWarnSpy).not.toHaveBeenCalled();
+      });
+
+      it('should parse allowExternalPaths as false', () => {
+        const configDir = path.join(tempDir, 'openspec');
+        fs.mkdirSync(configDir, { recursive: true });
+        fs.writeFileSync(
+          path.join(configDir, 'config.yaml'),
+          `schema: spec-driven\nallowExternalPaths: false\n`
+        );
+
+        const config = readProjectConfig(tempDir);
+
+        expect(config?.allowExternalPaths).toBe(false);
+        expect(consoleWarnSpy).not.toHaveBeenCalled();
+      });
+
+      it('should default allowExternalPaths to undefined when not present', () => {
+        const configDir = path.join(tempDir, 'openspec');
+        fs.mkdirSync(configDir, { recursive: true });
+        fs.writeFileSync(
+          path.join(configDir, 'config.yaml'),
+          `schema: spec-driven\n`
+        );
+
+        const config = readProjectConfig(tempDir);
+
+        expect(config?.allowExternalPaths).toBeUndefined();
+        expect(consoleWarnSpy).not.toHaveBeenCalled();
+      });
+
+      it('should warn when allowExternalPaths has invalid type', () => {
+        const configDir = path.join(tempDir, 'openspec');
+        fs.mkdirSync(configDir, { recursive: true });
+        fs.writeFileSync(
+          path.join(configDir, 'config.yaml'),
+          `schema: spec-driven\nallowExternalPaths: "yes"\n`
+        );
+
+        const config = readProjectConfig(tempDir);
+
+        expect(config?.allowExternalPaths).toBeUndefined();
+        expect(consoleWarnSpy).toHaveBeenCalledWith(
+          expect.stringContaining("Invalid 'allowExternalPaths' field")
+        );
+      });
+
       it('should handle completely invalid YAML gracefully', () => {
         const configDir = path.join(tempDir, 'openspec');
         fs.mkdirSync(configDir, { recursive: true });

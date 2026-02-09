@@ -10,7 +10,15 @@ import chalk from 'chalk';
 import ora from 'ora';
 import { createRequire } from 'module';
 import { FileSystemUtils } from '../utils/file-system.js';
-import { transformToHyphenCommands } from '../utils/command-references.js';
+import {
+  transformToHyphenCommands,
+  composeTransformers,
+} from '../utils/command-references.js';
+import {
+  resolveSpecsPaths,
+  createSpecsPathTransformer,
+} from '../utils/specs-path.js';
+import { readProjectConfig } from './project-config.js';
 import { AI_TOOLS, OPENSPEC_DIR_NAME } from './config.js';
 import {
   generateCommands,
@@ -95,9 +103,19 @@ export class UpdateCommand {
     }
     console.log();
 
-    // 7. Prepare templates
+    // 7. Prepare templates and transformers
     const skillTemplates = getSkillTemplates();
-    const commandContents = getCommandContents();
+
+    // Read project config for specsPath
+    const projectConfig = readProjectConfig(resolvedProjectPath);
+    const specsPaths = resolveSpecsPaths(resolvedProjectPath, projectConfig?.specsPath);
+    const specsPathTransformer = createSpecsPathTransformer(specsPaths.relativePosix);
+
+    // Apply specsPath transformer to command contents
+    const commandContents = getCommandContents().map((c) => ({
+      ...c,
+      body: specsPathTransformer(c.body),
+    }));
 
     // 8. Update tools (all if force, otherwise only those needing update)
     const toolsToUpdate = this.force ? configuredTools : toolsNeedingUpdate.map((s) => s.toolId);
@@ -118,8 +136,9 @@ export class UpdateCommand {
           const skillDir = path.join(skillsDir, dirName);
           const skillFile = path.join(skillDir, 'SKILL.md');
 
-          // Use hyphen-based command references for OpenCode
-          const transformer = tool.value === 'opencode' ? transformToHyphenCommands : undefined;
+          // Compose transformers: specsPath replacement + tool-specific (e.g., hyphen commands for OpenCode)
+          const toolTransformer = tool.value === 'opencode' ? transformToHyphenCommands : undefined;
+          const transformer = composeTransformers(specsPathTransformer, toolTransformer);
           const skillContent = generateSkillContent(template, OPENSPEC_VERSION, transformer);
           await FileSystemUtils.writeFile(skillFile, skillContent);
         }
@@ -353,7 +372,17 @@ export class UpdateCommand {
     // Create skills for selected tools
     const newlyConfigured: string[] = [];
     const skillTemplates = getSkillTemplates();
-    const commandContents = getCommandContents();
+
+    // Read project config for specsPath
+    const projectConfig = readProjectConfig(projectPath);
+    const specsPaths = resolveSpecsPaths(projectPath, projectConfig?.specsPath);
+    const specsPathTransformer = createSpecsPathTransformer(specsPaths.relativePosix);
+
+    // Apply specsPath transformer to command contents
+    const commandContents = getCommandContents().map((c) => ({
+      ...c,
+      body: specsPathTransformer(c.body),
+    }));
 
     for (const toolId of selectedTools) {
       const tool = AI_TOOLS.find((t) => t.value === toolId);
@@ -369,8 +398,9 @@ export class UpdateCommand {
           const skillDir = path.join(skillsDir, dirName);
           const skillFile = path.join(skillDir, 'SKILL.md');
 
-          // Use hyphen-based command references for OpenCode
-          const transformer = tool.value === 'opencode' ? transformToHyphenCommands : undefined;
+          // Compose transformers: specsPath replacement + tool-specific (e.g., hyphen commands for OpenCode)
+          const toolTransformer = tool.value === 'opencode' ? transformToHyphenCommands : undefined;
+          const transformer = composeTransformers(specsPathTransformer, toolTransformer);
           const skillContent = generateSkillContent(template, OPENSPEC_VERSION, transformer);
           await FileSystemUtils.writeFile(skillFile, skillContent);
         }

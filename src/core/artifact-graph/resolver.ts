@@ -91,6 +91,20 @@ export function getSchemaDir(
 }
 
 /**
+ * Checks if a schema is a built-in (package) schema.
+ * Returns true if the schema exists in the package's schemas directory.
+ *
+ * @param name - Schema name (e.g., "spec-driven")
+ * @returns True if the schema is built-in, false otherwise
+ */
+export function isBuiltInSchema(name: string): boolean {
+  const normalizedName = name.replace(/\.ya?ml$/, '');
+  const packageDir = path.join(getPackageSchemasDir(), normalizedName);
+  const packageSchemaPath = path.join(packageDir, 'schema.yaml');
+  return fs.existsSync(packageSchemaPath);
+}
+
+/**
  * Resolves a schema name to a SchemaYaml object.
  *
  * Resolution order (when projectRoot is provided):

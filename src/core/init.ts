@@ -11,7 +11,15 @@ import ora from 'ora';
 import * as fs from 'fs';
 import { createRequire } from 'module';
 import { FileSystemUtils } from '../utils/file-system.js';
-import { transformToHyphenCommands } from '../utils/command-references.js';
+import {
+  transformToHyphenCommands,
+  composeTransformers,
+} from '../utils/command-references.js';
+import {
+  resolveSpecsPaths,
+  createSpecsPathTransformer,
+} from '../utils/specs-path.js';
+import { readProjectConfig } from './project-config.js';
 import {
   AI_TOOLS,
   OPENSPEC_DIR_NAME,
@@ -425,7 +433,17 @@ export class InitCommand {
 
     // Get skill and command templates once (shared across all tools)
     const skillTemplates = getSkillTemplates();
-    const commandContents = getCommandContents();
+
+    // Read project config for specsPath
+    const projectConfig = readProjectConfig(projectPath);
+    const specsPaths = resolveSpecsPaths(projectPath, projectConfig?.specsPath);
+    const specsPathTransformer = createSpecsPathTransformer(specsPaths.relativePosix);
+
+    // Apply specsPath transformer to command contents
+    const commandContents = getCommandContents().map((c) => ({
+      ...c,
+      body: specsPathTransformer(c.body),
+    }));
 
     // Process each tool
     for (const tool of tools) {
@@ -440,9 +458,9 @@ export class InitCommand {
           const skillDir = path.join(skillsDir, dirName);
           const skillFile = path.join(skillDir, 'SKILL.md');
 
-          // Generate SKILL.md content with YAML frontmatter including generatedBy
-          // Use hyphen-based command references for OpenCode
-          const transformer = tool.value === 'opencode' ? transformToHyphenCommands : undefined;
+          // Compose transformers: specsPath replacement + tool-specific (e.g., hyphen commands for OpenCode)
+          const toolTransformer = tool.value === 'opencode' ? transformToHyphenCommands : undefined;
+          const transformer = composeTransformers(specsPathTransformer, toolTransformer);
           const skillContent = generateSkillContent(template, OPENSPEC_VERSION, transformer);
 
           // Write the skill file

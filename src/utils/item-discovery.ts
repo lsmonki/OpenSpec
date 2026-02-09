@@ -1,5 +1,7 @@
 import { promises as fs } from 'fs';
 import path from 'path';
+import { resolveSpecsPaths } from './specs-path.js';
+import { readProjectConfig } from '../core/project-config.js';
 
 export async function getActiveChangeIds(root: string = process.cwd()): Promise<string[]> {
   const changesPath = path.join(root, 'openspec', 'changes');
@@ -23,7 +25,9 @@ export async function getActiveChangeIds(root: string = process.cwd()): Promise<
 }
 
 export async function getSpecIds(root: string = process.cwd()): Promise<string[]> {
-  const specsPath = path.join(root, 'openspec', 'specs');
+  const projectConfig = readProjectConfig(root);
+  const specsPaths = resolveSpecsPaths(root, projectConfig?.specsPath);
+  const specsPath = specsPaths.absolute;
   const result: string[] = [];
   try {
     const entries = await fs.readdir(specsPath, { withFileTypes: true });

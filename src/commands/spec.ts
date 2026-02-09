@@ -6,8 +6,13 @@ import { Validator } from '../core/validation/validator.js';
 import type { Spec } from '../core/schemas/index.js';
 import { isInteractive } from '../utils/interactive.js';
 import { getSpecIds } from '../utils/item-discovery.js';
+import { resolveSpecsPaths } from '../utils/specs-path.js';
+import { readProjectConfig } from '../core/project-config.js';
 
-const SPECS_DIR = 'openspec/specs';
+function getSpecsDir(): string {
+  const config = readProjectConfig(process.cwd());
+  return resolveSpecsPaths(process.cwd(), config?.specsPath).absolute;
+}
 
 interface ShowOptions {
   json?: boolean;
@@ -65,8 +70,6 @@ function printSpecTextRaw(specPath: string): void {
 }
 
 export class SpecCommand {
-  private SPECS_DIR = 'openspec/specs';
-
   async show(specId?: string, options: ShowOptions = {}): Promise<void> {
     if (!specId) {
       const canPrompt = isInteractive(options);
@@ -82,9 +85,10 @@ export class SpecCommand {
       }
     }
 
-    const specPath = join(this.SPECS_DIR, specId, 'spec.md');
+    const specsDir = getSpecsDir();
+    const specPath = join(specsDir, specId, 'spec.md');
     if (!existsSync(specPath)) {
-      throw new Error(`Spec '${specId}' not found at openspec/specs/${specId}/spec.md`);
+      throw new Error(`Spec '${specId}' not found at ${specsDir}/${specId}/spec.md`);
     }
 
     if (options.json) {
@@ -143,19 +147,20 @@ export function registerSpecCommand(rootProgram: typeof program) {
     .option('--long', 'Show id and title with counts')
     .action((options: { json?: boolean; long?: boolean }) => {
       try {
-        if (!existsSync(SPECS_DIR)) {
+        const specsDir = getSpecsDir();
+        if (!existsSync(specsDir)) {
           console.log('No items found');
           return;
         }
 
-        const specs = readdirSync(SPECS_DIR, { withFileTypes: true })
+        const specs = readdirSync(specsDir, { withFileTypes: true })
           .filter(dirent => dirent.isDirectory())
           .map(dirent => {
-            const specPath = join(SPECS_DIR, dirent.name, 'spec.md');
+            const specPath = join(specsDir, dirent.name, 'spec.md');
             if (existsSync(specPath)) {
               try {
                 const spec = parseSpecFromFile(specPath, dirent.name);
-                
+
                 return {
                   id: dirent.name,
                   title: spec.name,
@@ -217,10 +222,11 @@ export function registerSpecCommand(rootProgram: typeof program) {
           }
         }
 
-        const specPath = join(SPECS_DIR, specId, 'spec.md');
-        
+        const specsDir = getSpecsDir();
+        const specPath = join(specsDir, specId, 'spec.md');
+
         if (!existsSync(specPath)) {
-          throw new Error(`Spec '${specId}' not found at openspec/specs/${specId}/spec.md`);
+          throw new Error(`Spec '${specId}' not found at ${specsDir}/${specId}/spec.md`);
         }
 
         const validator = new Validator(options.strict);
