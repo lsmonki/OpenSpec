@@ -157,5 +157,6 @@ opencode.json
 # Codex
 .codex/
 
-# GitHub (prompts/skills are generated, workflows managed upstream)
-.github/
+# GitHub generated files (openspec update)
+.github/prompts/
+.github/skills/
