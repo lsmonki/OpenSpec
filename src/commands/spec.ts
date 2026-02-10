@@ -56,12 +56,26 @@ function filterSpec(spec: Spec, options: ShowOptions): Spec {
 }
 
 /**
- * Print the raw markdown content for a spec file without any formatting.
- * Raw-first behavior ensures text mode is a passthrough for deterministic output.
+ * Print all markdown files in a spec folder.
+ * Shows spec.md first, then other files alphabetically.
  */
-function printSpecTextRaw(specPath: string): void {
-  const content = readFileSync(specPath, 'utf-8');
-  console.log(content);
+function printSpecFolderRaw(specDir: string): void {
+  const entries = readdirSync(specDir, { withFileTypes: true })
+    .filter(e => e.isFile() && e.name.endsWith('.md'))
+    .map(e => e.name)
+    .sort((a, b) => {
+      // spec.md first, then alphabetical
+      if (a === 'spec.md') return -1;
+      if (b === 'spec.md') return 1;
+      return a.localeCompare(b);
+    });
+
+  for (let i = 0; i < entries.length; i++) {
+    if (i > 0) console.log(`\n---\n`);
+    if (entries.length > 1) console.log(`<!-- ${entries[i]} -->`);
+    const content = readFileSync(join(specDir, entries[i]), 'utf-8');
+    console.log(content);
+  }
 }
 
 export class SpecCommand {
@@ -82,7 +96,8 @@ export class SpecCommand {
       }
     }
 
-    const specPath = join(this.SPECS_DIR, specId, 'spec.md');
+    const specDir = join(this.SPECS_DIR, specId);
+    const specPath = join(specDir, 'spec.md');
     if (!existsSync(specPath)) {
       throw new Error(`Spec '${specId}' not found at openspec/specs/${specId}/spec.md`);
     }
@@ -104,7 +119,7 @@ export class SpecCommand {
       console.log(JSON.stringify(output, null, 2));
       return;
     }
-    printSpecTextRaw(specPath);
+    printSpecFolderRaw(specDir);
   }
 }
 

@@ -800,9 +800,9 @@ This is an **agent-driven** operation - you will read delta specs and directly e
    Look for delta spec files in \`openspec/changes/<name>/specs/*/spec.md\`.
 
    Read \`openspec/schemas/<schema-name>/schema.yaml\` for format configuration (if it exists). Key fields:
-   - \`sections.requirement.section\`: Section name (default: \`Requirements\`)
-   - \`sections.requirement.pattern\`: Requirement header pattern (default: \`### Requirement: {name}\`)
-   - \`specValidation.pattern\`: Scenario pattern (default: \`#### Scenario: {name}\`)
+   - \`deltas[].section\`: Section name (default: \`Requirements\`)
+   - \`deltas[].pattern\`: Requirement header pattern (default: \`### Requirement: {name}\`)
+   - \`changeVerify.scenarioPattern\`: Scenario pattern (default: \`#### Scenario: {name}\`)
 
    Each delta spec file contains sections named with the configured section name:
    - \`## ADDED <section>\` - New requirements to add
@@ -880,7 +880,7 @@ The system SHALL do something new.
 - TO: \`### Requirement: New Name\`
 \`\`\`
 
-**Note:** The section name ("Requirements") and header patterns are configurable via the project's schema.yaml. Check \`sections.requirement\` for actual patterns.
+**Note:** The section name ("Requirements") and header patterns are configurable via the project's schema.yaml. Check \`deltas[]\` for actual patterns.
 
 **Key Principle: Intelligent Merging**
 
@@ -2505,9 +2505,9 @@ This is an **agent-driven** operation - you will read delta specs and directly e
    Look for delta spec files in \`openspec/changes/<name>/specs/*/spec.md\`.
 
    Read \`openspec/schemas/<schema-name>/schema.yaml\` for format configuration (if it exists). Key fields:
-   - \`sections.requirement.section\`: Section name (default: \`Requirements\`)
-   - \`sections.requirement.pattern\`: Requirement header pattern (default: \`### Requirement: {name}\`)
-   - \`specValidation.pattern\`: Scenario pattern (default: \`#### Scenario: {name}\`)
+   - \`deltas[].section\`: Section name (default: \`Requirements\`)
+   - \`deltas[].pattern\`: Requirement header pattern (default: \`### Requirement: {name}\`)
+   - \`changeVerify.scenarioPattern\`: Scenario pattern (default: \`#### Scenario: {name}\`)
 
    Each delta spec file contains sections named with the configured section name:
    - \`## ADDED <section>\` - New requirements to add
@@ -2585,7 +2585,7 @@ The system SHALL do something new.
 - TO: \`### Requirement: New Name\`
 \`\`\`
 
-**Note:** The section name ("Requirements") and header patterns are configurable via the project's schema.yaml. Check \`sections.requirement\` for actual patterns.
+**Note:** The section name ("Requirements") and header patterns are configurable via the project's schema.yaml. Check \`deltas[]\` for actual patterns.
 
 **Key Principle: Intelligent Merging**
 
@@ -2661,6 +2661,11 @@ export function getVerifyChangeSkillTemplate(): SkillTemplate {
 
    This returns the change directory and context files. Read all available artifacts from \`contextFiles\`.
 
+   **Spec file loading priority** (for each spec folder in \`openspec/changes/<name>/specs/<capability>/\`):
+   1. Load spec.md — contains the requirements (primary artifact)
+   2. Load verification file if \`changeVerify.artifact\` points to a different artifact (e.g., verify.md) — contains scenarios/verification criteria
+   3. Load remaining .md files in the same spec folder as additional context
+
 4. **Initialize verification report structure**
 
    Create a report structure with three dimensions:
@@ -2683,8 +2688,8 @@ export function getVerifyChangeSkillTemplate(): SkillTemplate {
    **Spec Coverage**:
    - If delta specs exist in \`openspec/changes/<name>/specs/\`:
      - Read schema format config from \`openspec/schemas/<schema-name>/schema.yaml\` or use defaults:
-       - \`sections.requirement.pattern\` (default: \`### Requirement: {name}\`)
-       - \`specValidation.pattern\` (default: \`#### Scenario: {name}\`)
+       - \`deltas[].pattern\` (default: \`### Requirement: {name}\`)
+       - \`changeVerify.scenarioPattern\` (default: \`#### Scenario: {name}\`)
      - Extract all requirements using the configured pattern
      - For each requirement:
        - Search codebase for keywords related to the requirement
@@ -2705,7 +2710,7 @@ export function getVerifyChangeSkillTemplate(): SkillTemplate {
        - Recommendation: "Review <file>:<lines> against requirement X"
 
    **Scenario Coverage**:
-   - For each scenario in delta specs (using configured \`specValidation.pattern\`):
+   - For each scenario in delta specs (using configured \`changeVerify.scenarioPattern\`):
      - Check if conditions are handled in code
      - Check if tests exist covering the scenario
      - If scenario appears uncovered:
@@ -3259,6 +3264,11 @@ export function getOpsxVerifyCommandTemplate(): CommandTemplate {
 
    This returns the change directory and context files. Read all available artifacts from \`contextFiles\`.
 
+   **Spec file loading priority** (for each spec folder in \`openspec/changes/<name>/specs/<capability>/\`):
+   1. Load spec.md — contains the requirements (primary artifact)
+   2. Load verification file if \`changeVerify.artifact\` points to a different artifact (e.g., verify.md) — contains scenarios/verification criteria
+   3. Load remaining .md files in the same spec folder as additional context
+
 4. **Initialize verification report structure**
 
    Create a report structure with three dimensions:
@@ -3281,8 +3291,8 @@ export function getOpsxVerifyCommandTemplate(): CommandTemplate {
    **Spec Coverage**:
    - If delta specs exist in \`openspec/changes/<name>/specs/\`:
      - Read schema format config from \`openspec/schemas/<schema-name>/schema.yaml\` or use defaults:
-       - \`sections.requirement.pattern\` (default: \`### Requirement: {name}\`)
-       - \`specValidation.pattern\` (default: \`#### Scenario: {name}\`)
+       - \`deltas[].pattern\` (default: \`### Requirement: {name}\`)
+       - \`changeVerify.scenarioPattern\` (default: \`#### Scenario: {name}\`)
      - Extract all requirements using the configured pattern
      - For each requirement:
        - Search codebase for keywords related to the requirement
@@ -3303,7 +3313,7 @@ export function getOpsxVerifyCommandTemplate(): CommandTemplate {
        - Recommendation: "Review <file>:<lines> against requirement X"
 
    **Scenario Coverage**:
-   - For each scenario in delta specs (using configured \`specValidation.pattern\`):
+   - For each scenario in delta specs (using configured \`changeVerify.scenarioPattern\`):
      - Check if conditions are handled in code
      - Check if tests exist covering the scenario
      - If scenario appears uncovered:

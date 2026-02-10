@@ -1,4 +1,5 @@
 import { patternToRegex } from '../../utils/pattern.js';
+import type { DeltaConfig } from '../artifact-graph/types.js';
 
 export interface RequirementBlock {
   headerLine: string; // e.g., '### Requirement: Something'
@@ -170,6 +171,23 @@ export interface DeltaPlan {
   };
 }
 
+/**
+ * A DeltaPlan scoped to a specific section, including metadata from the delta config.
+ */
+export interface SectionDeltaPlan extends DeltaPlan {
+  /** Section name this delta applies to (e.g., 'Requirements', 'Constraints') */
+  sectionName: string;
+  /** Pattern used to identify blocks in this section */
+  pattern: string;
+}
+
+/**
+ * Combined result from parsing multiple delta sections in a single file.
+ */
+export interface MultiDeltaPlan {
+  sections: SectionDeltaPlan[];
+}
+
 function normalizeLineEndings(content: string): string {
   return content.replace(/\r\n?/g, '\n');
 }
@@ -209,6 +227,33 @@ export function parseDeltaSpec(content: string, config?: RequirementFormatConfig
       renamed: renamedLookup.found,
     },
   };
+}
+
+/**
+ * Parse a delta-formatted spec using multiple delta configs.
+ * Each delta config targets a different section (e.g., "Requirements", "Constraints").
+ * Returns per-section results.
+ *
+ * @param content The delta spec content
+ * @param deltaConfigs Array of delta configurations from the schema
+ */
+export function parseDeltaSpecMulti(content: string, deltaConfigs: DeltaConfig[]): MultiDeltaPlan {
+  const sections: SectionDeltaPlan[] = [];
+
+  for (const delta of deltaConfigs) {
+    const config: RequirementFormatConfig = {
+      sectionName: delta.section,
+      requirementPattern: delta.pattern,
+    };
+    const plan = parseDeltaSpec(content, config);
+    sections.push({
+      ...plan,
+      sectionName: delta.section,
+      pattern: delta.pattern,
+    });
+  }
+
+  return { sections };
 }
 
 function splitTopLevelSections(content: string): Record<string, string> {

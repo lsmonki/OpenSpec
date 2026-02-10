@@ -199,104 +199,187 @@ apply:
 
 ### Custom Spec Formats
 
-By default, OpenSpec expects specs to follow a specific format with `## Requirements`, `### Requirement: {name}`, and `#### Scenario: {name}` headers. You can customize this format in your schema using `specValidation` and `sections` configuration.
+By default, OpenSpec expects specs to follow a specific format with `## Requirements`, `### Requirement: {name}`, and `#### Scenario: {name}` headers. You can customize this format using three schema configuration areas: `changeVerify` (schema-level), `requiredSpecArtifacts` (schema-level), `deltas[]` (per-artifact), and `validations[]` (per-artifact).
 
-#### Spec Validation (`specValidation`)
+#### Change Verification (`changeVerify`)
 
-Controls how specs are validated:
+Schema-level configuration for change compliance and requirement/scenario extraction patterns used by `/opsx:verify`:
 
 ```yaml
-# schema.yaml
-specValidation:
-  pattern: "#### Scenario: {name}"  # Scenario header pattern
-  required: true                     # Are scenarios mandatory?
-  artifact: specs                    # Which artifact contains scenarios
-  shallMustPattern: "SHALL|MUST"     # Normative keyword pattern (null to disable)
+changeVerify:
+  artifact: specs                            # Which artifact has requirements/scenarios
+  requirementPattern: "### Requirement: {name}"  # Pattern to extract requirement headers
+  scenarioPattern: "#### Scenario: {name}"       # Pattern to extract scenario headers
+  shallMustPattern: "SHALL|MUST"                 # Normative keyword regex; null to disable
 ```
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `pattern` | `#### Scenario: {name}` | Pattern for scenario headers. `{name}` is replaced with capture group. |
-| `required` | `true` | Whether scenarios are required for each requirement. |
-| `artifact` | `specs` | Which artifact contains scenarios (use different artifact for separate verify files). |
-| `shallMustPattern` | `SHALL\|MUST` | Regex pattern for normative keywords. Set to `null` to disable validation. |
+| `artifact` | `specs` | Which artifact has requirements and scenarios. |
+| `requirementPattern` | `### Requirement: {name}` | Pattern to extract requirement headers from specs. Used by `/opsx:verify`. |
+| `scenarioPattern` | `#### Scenario: {name}` | Pattern to extract scenario headers from specs. Used by `/opsx:verify`. |
+| `shallMustPattern` | `SHALL\|MUST` | Regex for normative keywords in requirements. Set to `null` to disable. |
 
-#### Sections Configuration (`sections`)
+#### Required Spec Artifacts (`requiredSpecArtifacts`)
 
-Controls spec structure validation per artifact:
+Declares which artifact files must exist in each spec folder:
 
 ```yaml
-# schema.yaml
+requiredSpecArtifacts:
+  - specs        # spec.md must exist
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `requiredSpecArtifacts` | `['specs']` | Array of artifact IDs whose files must exist in each spec folder. Validated by `openspec validate --specs`. |
+
+#### Delta Configuration (`deltas[]`)
+
+Per-artifact configuration for delta merge operations. Each entry defines a mergeable section:
+
+```yaml
 artifacts:
   - id: specs
     generates: "specs/**/*.md"
-    sections:
-      required:
-        - Purpose
-        - Requirements
-      optional:
-        - Definitions
-        - Status
-      requirement:
-        section: Requirements           # Section containing requirements
-        pattern: "### Requirement: {name}"  # Requirement header pattern
+    deltas:
+      - section: Requirements
+        pattern: "### Requirement: {name}"
+      - section: Constraints              # Multiple delta sections supported
+        pattern: "### Constraint: {name}"
+```
+
+| Field | Description |
+|-------|-------------|
+| `section` | Section name (e.g., "Requirements"). Delta operations are derived: `## ADDED Requirements`, `## MODIFIED Requirements`, etc. |
+| `pattern` | Block pattern within the section. Must include `{name}` placeholder. |
+
+When a spec artifact has `deltas[]`, change specs can use delta operations (`## ADDED <section>`, `## MODIFIED <section>`, `## REMOVED <section>`, `## RENAMED <section>`) for each configured section.
+
+#### Structural Validations (`validations[]`)
+
+Per-artifact validation rules with three granularity levels:
+
+```yaml
+artifacts:
+  - id: specs
+    generates: "specs/**/*.md"
+    validations:
+      # File-level: pattern must exist anywhere in file
+      - pattern: "## Purpose"
+        required: true
+      - pattern: "## Requirements"
+        required: true
+
+      # Scope-level: pattern must exist within ## section
+      - pattern: "### Requirement: {name}"
+        required: true
+        scope: Requirements
+
+      # eachBlock-level: pattern must exist in EACH ### block within ## section
+      - pattern: "#### Scenario: {name}"
+        required: true
+        eachBlock: Requirements
+      - pattern: "SHALL|MUST"
+        required: true
+        eachBlock: Requirements
 ```
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `sections.required` | `["Purpose", "Requirements"]` | Section headers that must be present. |
-| `sections.optional` | `[]` | Section headers that are recognized but not required. |
-| `sections.requirement.section` | `Requirements` | Name of the section containing requirements. |
-| `sections.requirement.pattern` | `### Requirement: {name}` | Pattern for requirement headers. |
+| `pattern` | (required) | Pattern to validate. Can be literal, regex, or use `{name}` placeholder. |
+| `required` | `true` | Whether the pattern must be present. |
+| `scope` | (none) | Validate within a specific `## Section`. |
+| `eachBlock` | (none) | Validate within each `###` block of a `## Section`. |
+
+> **Note:** `scope` and `eachBlock` are mutually exclusive — use one or the other on a given rule, not both.
 
 #### Examples
 
 **Custom requirement pattern:**
 
 ```yaml
-# Use "### Req: Name" instead of "### Requirement: Name"
 artifacts:
   - id: specs
-    sections:
-      requirement:
+    deltas:
+      - section: Requirements
         pattern: "### Req: {name}"
+    validations:
+      - pattern: "## Purpose"
+        required: true
+      - pattern: "### Req: {name}"
+        required: true
+        scope: Requirements
 ```
 
-**Spanish normative keywords:**
+**Multiple delta sections (Requirements + Constraints):**
 
 ```yaml
-# Accept DEBE/DEBERÁ instead of SHALL/MUST
-specValidation:
-  shallMustPattern: "DEBE|DEBERÁ"
+artifacts:
+  - id: specs
+    deltas:
+      - section: Requirements
+        pattern: "### Requirement: {name}"
+      - section: Constraints
+        pattern: "### Constraint: {name}"
+    validations:
+      - pattern: "## Purpose"
+        required: true
+      - pattern: "## Requirements"
+        required: true
+      - pattern: "## Constraints"
+        required: true
+      - pattern: "SHALL|MUST"
+        required: true
+        eachBlock: Requirements
+```
+
+**eachBlock validation (pattern in every requirement):**
+
+```yaml
+validations:
+  - pattern: "#### Scenario: {name}"
+    required: true
+    eachBlock: Requirements   # Every ### block in ## Requirements must have a scenario
+```
+
+**Spanish normative keywords (via validations[]):**
+
+```yaml
+validations:
+  - pattern: "DEBE|DEBERÁ"
+    required: true
+    eachBlock: Requirements
 ```
 
 **Disable normative validation:**
 
-```yaml
-# Don't require SHALL/MUST in requirement text
-specValidation:
-  shallMustPattern: null
-```
+Simply omit the normative keyword rule from `validations[]`.
 
 **Case-insensitive normative keywords:**
 
 ```yaml
-# Accept shall/Shall/SHALL etc.
-specValidation:
-  shallMustPattern: "[Ss][Hh][Aa][Ll][Ll]|[Mm][Uu][Ss][Tt]"
+validations:
+  - pattern: "[Ss][Hh][Aa][Ll][Ll]|[Mm][Uu][Ss][Tt]"
+    required: true
+    eachBlock: Requirements
 ```
 
 **Scenarios in separate file:**
 
 ```yaml
-# Scenarios live in verify.md, not spec.md
-specValidation:
-  artifact: verify
-  required: true
+requiredSpecArtifacts:
+  - specs
+  - verify
 
 artifacts:
   - id: specs
     generates: "specs/**/spec.md"
+    validations:
+      - pattern: "## Purpose"
+        required: true
+      - pattern: "## Requirements"
+        required: true
+      # No scenario eachBlock rule here — scenarios live in verify artifact
   - id: verify
     generates: "specs/**/verify.md"
     requires: [specs]
@@ -304,11 +387,7 @@ artifacts:
 
 **Optional scenarios:**
 
-```yaml
-# Scenarios are recommended but not required
-specValidation:
-  required: false
-```
+Simply omit the scenario `eachBlock` rule from `validations[]`.
 
 ### Templates
 

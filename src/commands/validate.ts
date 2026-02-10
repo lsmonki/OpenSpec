@@ -1,11 +1,13 @@
 import ora from 'ora';
 import path from 'path';
+import { promises as fs } from 'fs';
 import { Validator, SpecValidationConfig } from '../core/validation/validator.js';
 import { isInteractive, resolveNoInteractive } from '../utils/interactive.js';
 import { getActiveChangeIds, getSpecIds } from '../utils/item-discovery.js';
 import { nearestMatches } from '../utils/match.js';
 import { readProjectConfig } from '../core/project-config.js';
 import { resolveSchema } from '../core/artifact-graph/resolver.js';
+import { resolveSpecArtifactFiles } from '../core/artifact-graph/schema.js';
 import type { SchemaYaml } from '../core/artifact-graph/types.js';
 
 type ItemType = 'change' | 'spec';
@@ -35,16 +37,19 @@ interface BulkItemResult {
  */
 function buildValidationConfig(schema: SchemaYaml): SpecValidationConfig {
   const specsArtifact = schema.artifacts.find(a => a.id === 'specs');
-  const sections = specsArtifact?.sections;
+  const firstDelta = specsArtifact?.deltas?.[0];
 
   return {
-    requiredSections: sections?.required,
-    requirementSection: sections?.requirement?.section,
-    requirementPattern: sections?.requirement?.pattern,
-    scenarioPattern: schema.specValidation?.pattern,
-    scenariosRequired: schema.specValidation?.required,
-    scenarioArtifact: schema.specValidation?.artifact,
-    shallMustPattern: schema.specValidation?.shallMustPattern,
+    requiredSections: specsArtifact?.validations
+      ?.filter(v => v.required && !v.scope && !v.eachBlock)
+      .map(v => v.pattern.replace(/^## /, '')),
+    requirementSection: firstDelta?.section,
+    requirementPattern: firstDelta?.pattern,
+    deltaConfigs: specsArtifact?.deltas,
+    validationRules: specsArtifact?.validations,
+    changeScenarioPattern: schema.changeVerify?.scenarioPattern,
+    changeShallMustPattern: schema.changeVerify?.shallMustPattern,
+    specArtifactFiles: resolveSpecArtifactFiles(schema),
   };
 }
 
@@ -181,9 +186,8 @@ export class ValidateCommand {
       process.exitCode = report.valid ? 0 : 1;
       return;
     }
-    const file = path.join(projectRoot, 'openspec', 'specs', id, 'spec.md');
     const start = Date.now();
-    const report = await validator.validateSpec(file, validationConfig);
+    const report = await this.validateSpecArtifacts(validator, projectRoot, id, validationConfig);
     const durationMs = Date.now() - start;
     this.printReport('spec', id, report, durationMs, opts.json);
     process.exitCode = report.valid ? 0 : 1;
@@ -223,6 +227,48 @@ export class ValidateCommand {
     bullets.forEach(b => console.error(`  ${b}`));
   }
 
+  /**
+   * Validate all artifact files for a spec (not just spec.md).
+   * Delta-bearing artifacts are validated structurally; non-delta artifacts are checked for existence.
+   */
+  private async validateSpecArtifacts(
+    validator: Validator,
+    projectRoot: string,
+    specId: string,
+    config?: SpecValidationConfig
+  ): Promise<{ valid: boolean; issues: Array<{ level: string; path: string; message: string }> }> {
+    const artifactFiles = config?.specArtifactFiles ?? [
+      { filename: 'spec.md', deltas: [{ section: 'Requirements', pattern: '### Requirement: {name}' }] },
+    ];
+    const allIssues: Array<{ level: string; path: string; message: string }> = [];
+    let allValid = true;
+
+    for (const af of artifactFiles) {
+      const file = path.join(projectRoot, 'openspec', 'specs', specId, af.filename);
+
+      if (af.deltas?.length) {
+        // Delta-bearing artifact: validate as spec
+        const report = await validator.validateSpec(file, config);
+        if (!report.valid) allValid = false;
+        allIssues.push(...report.issues);
+      } else {
+        // Non-delta artifact: check existence
+        try {
+          await fs.access(file);
+        } catch {
+          allValid = false;
+          allIssues.push({
+            level: 'ERROR',
+            path: `${specId}/${af.filename}`,
+            message: `Required artifact file "${af.filename}" not found`,
+          });
+        }
+      }
+    }
+
+    return { valid: allValid, issues: allIssues };
+  }
+
   private async runBulkValidation(scope: { changes: boolean; specs: boolean }, opts: { strict: boolean; json: boolean; concurrency?: string; noInteractive?: boolean }): Promise<void> {
     const spinner = !opts.json && !opts.noInteractive ? ora('Validating...').start() : undefined;
     const projectRoot = process.cwd();
@@ -250,8 +296,7 @@ export class ValidateCommand {
     for (const id of specIds) {
       queue.push(async () => {
         const start = Date.now();
-        const file = path.join(projectRoot, 'openspec', 'specs', id, 'spec.md');
-        const report = await validator.validateSpec(file, validationConfig);
+        const report = await this.validateSpecArtifacts(validator, projectRoot, id, validationConfig);
         const durationMs = Date.now() - start;
         return { id, type: 'spec' as const, valid: report.valid, issues: report.issues, durationMs };
       });

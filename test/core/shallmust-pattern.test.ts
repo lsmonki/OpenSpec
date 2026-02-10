@@ -4,11 +4,11 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
-describe('shallMustPattern configuration', () => {
+describe('shallMustPattern via validationRules eachBlock', () => {
   const specContent = `# Test Spec
 
 ## Purpose
-This spec tests the shallMustPattern option.
+This spec tests the shallMustPattern option via validationRules.
 
 ## Requirements
 
@@ -33,29 +33,44 @@ The system should work correctly with lowercase.
     fs.rmSync(tmpDir, { recursive: true });
   });
 
-  it('should fail with default pattern (no SHALL/MUST)', async () => {
+  it('should fail with default validationRules (no SHALL/MUST in text)', async () => {
     const validator = new Validator();
-    const result = await validator.validateSpec(specPath);
+    // Default validationRules include eachBlock 'SHALL|MUST' on Requirements
+    const result = await validator.validateSpec(specPath, {
+      validationRules: [
+        { pattern: '## Purpose', required: true },
+        { pattern: '## Requirements', required: true },
+        { pattern: '#### Scenario: {name}', required: true, eachBlock: 'Requirements' },
+        { pattern: 'SHALL|MUST', required: true, eachBlock: 'Requirements' },
+      ],
+    });
     expect(result.valid).toBe(false);
-    // Message includes the pattern used
     expect(result.issues.some(i => i.message.includes('SHALL|MUST'))).toBe(true);
   });
 
-  it('should pass when shallMustPattern is null', async () => {
+  it('should pass when no normative rule is configured', async () => {
     const validator = new Validator();
-    const result = await validator.validateSpec(specPath, { shallMustPattern: null });
+    // No SHALL|MUST rule in validationRules
+    const result = await validator.validateSpec(specPath, {
+      validationRules: [
+        { pattern: '## Purpose', required: true },
+        { pattern: '## Requirements', required: true },
+        { pattern: '#### Scenario: {name}', required: true, eachBlock: 'Requirements' },
+      ],
+    });
     expect(result.valid).toBe(true);
   });
 
-  it('should pass when shallMustPattern is empty string', async () => {
+  it('should pass with custom normative pattern matching "should"', async () => {
     const validator = new Validator();
-    const result = await validator.validateSpec(specPath, { shallMustPattern: '' });
-    expect(result.valid).toBe(true);
-  });
-
-  it('should pass with custom pattern matching "should"', async () => {
-    const validator = new Validator();
-    const result = await validator.validateSpec(specPath, { shallMustPattern: '[Ss]hould' });
+    const result = await validator.validateSpec(specPath, {
+      validationRules: [
+        { pattern: '## Purpose', required: true },
+        { pattern: '## Requirements', required: true },
+        { pattern: '#### Scenario: {name}', required: true, eachBlock: 'Requirements' },
+        { pattern: '[Ss]hould', required: true, eachBlock: 'Requirements' },
+      ],
+    });
     expect(result.valid).toBe(true);
   });
 });

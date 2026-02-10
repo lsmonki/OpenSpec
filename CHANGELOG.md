@@ -5,12 +5,10 @@
 ### Features
 
 - **Configurable spec formats** — Schemas can now define custom requirement patterns, section headers, scenario formats, and normative keyword validation. New schema fields:
-  - `specValidation.pattern`: Custom scenario header pattern (e.g., `### Scenario: {name}`)
-  - `specValidation.required`: Make scenarios optional
-  - `specValidation.artifact`: Put scenarios in separate files (e.g., verify.md)
-  - `specValidation.shallMustPattern`: Custom normative keywords (e.g., `DEBE|DEBERÁ` for Spanish) or `null` to disable
-  - `sections.required/optional`: Configure required and optional section headers
-  - `sections.requirement.pattern`: Custom requirement header pattern (e.g., `### Req: {name}`)
+  - `changeVerify`: Schema-level change verification config (`artifact`, `requirementPattern`, `scenarioPattern`, `shallMustPattern`)
+  - `requiredSpecArtifacts`: Required artifact files in each spec folder (default: `['specs']`)
+  - `deltas[]`: Per-artifact delta merge config (supports multiple sections, e.g., Requirements + Constraints)
+  - `validations[]`: Per-artifact structural validation rules with three granularity levels (file-level, scope, eachBlock) — single source of truth for scenarios, normative keywords, etc.
 
 ## 1.1.1
 

@@ -9,9 +9,12 @@ The `configurable-spec-format` change introduced schema-driven spec format confi
 - **`deltas[]` replaces `sections.requirement`**: An array of block definitions per artifact. Each entry defines a mergeable section with its own pattern. Delta operations (ADDED/MODIFIED/REMOVED/RENAMED) are derived from the section name. Artifacts without `deltas` get copied as-is during sync.
 - **`validations[]` replaces `sections.required`/`sections.optional`**: Per-artifact structural validation rules with three granularity levels: file-level (pattern exists in file), section-level (`scope`), and block-level (`eachBlock`). Required sections become validation rules.
 - **`sections` field removed**: Absorbed entirely by `deltas[]` and `validations[]`.
-- **Rename `specValidation` → `specVerify`**: Avoids naming confusion with the new `validations[]` array.
-- **Rename `changeValidation` → `changeVerify`**: Same reason.
-- **Multi-file delta merge in sync/archive**: Any artifact whose `generates` starts with `specs/` can define its own `deltas[]`, enabling delta merge for `verify.md`, `constraints.md`, etc. — not just `spec.md`.
+- **`specVerify` eliminated**: All structural validation (normative keywords, scenario requirements) is expressed via `validations[]` eachBlock rules. `specVerify` was redundant — everything it did is already covered by `validations[]`.
+- **`requiredSpecArtifacts` added**: Declares which artifact files must exist in each spec folder (default: `['specs']`).
+- **`changeVerify` enriched**: Now includes `requirementPattern` and `scenarioPattern` for `/opsx:verify` extraction.
+- **Rename `changeValidation` → `changeVerify`**: Avoids naming confusion.
+- **Multi-file delta merge in sync/archive**: Any artifact listed in `requiredSpecArtifacts` can define its own `deltas[]`, enabling delta merge for `verify.md`, `constraints.md`, etc. — not just `spec.md`. Artifact filenames are resolved from `generates` (last concrete segment) or `template` (fallback).
+- **Runtime uses `requiredSpecArtifacts`**: All hardcoded `spec.md` references in sync, validation, archive, and item discovery are replaced by schema-driven artifact file resolution.
 
 ---
 
@@ -27,7 +30,7 @@ specValidation:
   shallMustPattern: "SHALL|MUST"
 
 changeValidation:
-  artifact: "verify"
+  artifact: "specs"
 
 artifacts:
   - id: specs
@@ -45,14 +48,14 @@ artifacts:
 **AFTER (this change)**:
 
 ```yaml
-specVerify:
+changeVerify:
   artifact: "specs"
-  pattern: "#### Scenario: {name}"
-  required: true
+  requirementPattern: "### Requirement: {name}"
+  scenarioPattern: "#### Scenario: {name}"
   shallMustPattern: "SHALL|MUST"
 
-changeVerify:
-  artifact: "verify"
+requiredSpecArtifacts:
+  - specs
 
 artifacts:
   - id: specs
@@ -156,11 +159,9 @@ validations:
     required: true
 ```
 
-### 4. Naming: `specVerify`/`changeVerify`
+### 4. `validations[]` is the single source of truth for structural validation
 
-Renaming avoids confusion between:
-- `specVerify` / `changeVerify` — schema-level compliance configuration
-- `validations[]` — artifact-level structural rules
+All structural validation — section presence, normative keywords, scenario requirements — is expressed via `validations[]` eachBlock rules. There is no separate `specVerify` mechanism. `changeVerify` is a separate concern: it configures how `/opsx:verify` extracts requirements and scenarios for code verification, not how specs are structurally validated.
 
 ---
 
@@ -169,13 +170,14 @@ Renaming avoids confusion between:
 A schema with separate verification files:
 
 ```yaml
-specVerify:
-  artifact: "spec-verify"              # scenarios live in verify.md, not spec.md
-  pattern: "### Scenario: {name}"
-  required: true
-
 changeVerify:
-  artifact: "verify"
+  artifact: "specs"
+  requirementPattern: "### Requirement: {name}"
+  scenarioPattern: "### Scenario: {name}"
+
+requiredSpecArtifacts:
+  - specs
+  - spec-verify
 
 artifacts:
   - id: specs
@@ -235,13 +237,13 @@ description: Default OpenSpec workflow
 
 # Schema-level (implicit defaults)
 changeVerify:
-  artifact: "verify"
-
-specVerify:
   artifact: "specs"
-  pattern: "#### Scenario: {name}"
-  required: true
+  requirementPattern: "### Requirement: {name}"
+  scenarioPattern: "#### Scenario: {name}"
   shallMustPattern: "SHALL|MUST"
+
+requiredSpecArtifacts:
+  - specs
 
 artifacts:
   - id: proposal
@@ -294,14 +296,13 @@ apply:
 ### Schema-Level Fields
 
 ```yaml
-specVerify:
-  artifact: string              # which artifact contains verification criteria
-  pattern: string               # pattern to identify verification blocks
-  required: boolean             # whether verification is mandatory
-  shallMustPattern: string|null # regex for normative keywords, null to disable
-
 changeVerify:
-  artifact: string              # which artifact verifies change implementation
+  artifact: string              # which artifact has requirements/scenarios
+  requirementPattern: string    # pattern to extract requirement headers
+  scenarioPattern: string       # pattern to extract scenario headers
+  shallMustPattern: string|null # regex for normative keywords; null to disable
+
+requiredSpecArtifacts: string[] # which artifact files must exist in each spec folder
 ```
 
 ### Artifact-Level Fields
@@ -332,11 +333,11 @@ artifacts:
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `changeVerify.artifact` | `string` | `"verify"` | Artifact that verifies change implementation |
-| `specVerify.artifact` | `string` | `"specs"` | Artifact containing scenarios (`"specs"` = inline) |
-| `specVerify.pattern` | `string` | `"#### Scenario: {name}"` | Pattern to identify scenario blocks |
-| `specVerify.required` | `boolean` | `true` | Whether validation fails if no scenarios found |
-| `specVerify.shallMustPattern` | `string \| null` | `"SHALL\|MUST"` | Regex for normative keywords; `null` to disable |
+| `changeVerify.artifact` | `string` | `"specs"` | Which artifact has requirements/scenarios |
+| `changeVerify.requirementPattern` | `string` | `"### Requirement: {name}"` | Pattern to extract requirement headers |
+| `changeVerify.scenarioPattern` | `string` | `"#### Scenario: {name}"` | Pattern to extract scenario headers |
+| `changeVerify.shallMustPattern` | `string \| null` | `"SHALL\|MUST"` | Regex for normative keywords; `null` to disable |
+| `requiredSpecArtifacts` | `string[]` | `["specs"]` | Artifact files required in each spec folder |
 | `deltas[].section` | `string` | — | Section name for delta operations |
 | `deltas[].pattern` | `string` | — | Block identification pattern |
 | `validations[].pattern` | `string` | — | Pattern to search for |
@@ -353,7 +354,7 @@ Skills read format configuration from the schema at runtime. Before generating s
 1. `deltas[].section` → delta section headers (e.g., `## ADDED Requirements`)
 2. `deltas[].pattern` → block format (e.g., `### Requirement: {name}`)
 3. `validations[]` → structural rules to follow
-4. `specVerify` → where verification criteria live
+4. `changeVerify` → patterns for requirement/scenario extraction in `/opsx:verify`
 
 This approach requires no code changes to the skill loading system — prompts instruct the AI to read the schema and adapt.
 
@@ -367,10 +368,10 @@ _(none)_
 
 ### Modified Capabilities
 
-- `artifact-graph`: Replace `sections` with `deltas[]` and `validations[]` on artifact definitions. Rename schema-level `specValidation`/`changeValidation` to `specVerify`/`changeVerify`. Update schema loading, type definitions, and default application.
-- `cli-validate`: Validation reads `validations[]` from artifact config instead of `sections.required`. Support scope/eachBlock granularity. Use renamed `specVerify`/`changeVerify` fields. Validate all output artifacts per schema (multi-file).
-- `specs-sync-skill`: Sync reads `deltas[]` from each output artifact to determine merge behavior. Artifacts with `deltas` get delta-merged; artifacts without get copied directly.
-- `docs-configurable-spec-format`: Update documentation to reflect new field names and structure (`deltas[]`, `validations[]`, `specVerify`, `changeVerify`).
+- `artifact-graph`: Replace `sections` with `deltas[]` and `validations[]` on artifact definitions. Eliminate `specVerify`, rename `changeValidation` → `changeVerify` (enriched with `requirementPattern`/`scenarioPattern`), add `requiredSpecArtifacts`. Update schema loading, type definitions, and default application.
+- `cli-validate`: Validation reads `validations[]` from artifact config instead of `sections.required`. Support scope/eachBlock granularity. Use `changeVerify` for cross-file verification. Validate all artifact files per `requiredSpecArtifacts` (multi-file). Item discovery checks all required artifact files, not just `spec.md`.
+- `specs-sync-skill`: Sync resolves artifact filenames from `requiredSpecArtifacts` and uses each artifact's `deltas[]` to determine merge behavior. Files with `deltas[]` get delta-merged; files without get copied directly. No hardcoded `spec.md` references.
+- `docs-configurable-spec-format`: Update documentation to reflect new field names and structure (`deltas[]`, `validations[]`, `changeVerify`, `requiredSpecArtifacts`).
 
 ## Impact
 
@@ -389,11 +390,14 @@ _(none)_
 - `src/commands/validate.ts` — build validation config from `validations[]` instead of `sections`
 
 **Sync/Archive** (high impact):
-- `src/core/specs-apply.ts` — iterate output artifacts, delta merge or direct copy per `deltas[]` config
-- `src/core/archive.ts` — sync all output artifacts, not just spec.md
+- `src/core/specs-apply.ts` — resolve artifact filenames from schema, use `requiredSpecArtifacts` to determine delta merge vs direct copy per file
+- `src/core/archive.ts` — detect delta specs via resolved artifact files, not hardcoded `spec.md`
+
+**Item Discovery** (medium impact):
+- `src/utils/item-discovery.ts` — `getSpecIds()` checks all `requiredSpecArtifacts` filenames, not just `spec.md`
 
 **Skill prompts** (medium impact):
-- `src/core/templates/skill-templates.ts` — update dynamic prompt instructions to reference `deltas[]`, `validations[]`, `specVerify`
+- `src/core/templates/skill-templates.ts` — update dynamic prompt instructions to reference `deltas[]`, `validations[]`, `changeVerify`
 
 **Schema templates** (low impact):
 - `schemas/spec-driven/schema.yaml` — update defaults to use new field structure
@@ -401,9 +405,9 @@ _(none)_
 
 ### Breaking Changes
 
-**Schema field renames** (breaking for custom schemas that adopted the v1 fields):
-- `specValidation` → `specVerify`
-- `changeValidation` → `changeVerify`
+**Schema field changes** (breaking for custom schemas that adopted the v1 fields):
+- `specValidation` → eliminated (replaced by `validations[]` eachBlock rules)
+- `changeValidation` → `changeVerify` (enriched with `requirementPattern`/`scenarioPattern`)
 - `sections.requirement` → `deltas[]`
 - `sections.required`/`sections.optional` → `validations[]`
 

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   extractRequirementsSection,
   parseDeltaSpec,
+  parseDeltaSpecMulti,
   RequirementFormatConfig,
 } from '../../../src/core/parsers/requirement-blocks.js';
 
@@ -203,6 +204,93 @@ Content
       expect(result.sectionPresence.modified).toBe(false);
       expect(result.sectionPresence.removed).toBe(false);
       expect(result.sectionPresence.renamed).toBe(false);
+    });
+  });
+
+  describe('parseDeltaSpecMulti', () => {
+    it('should parse multiple delta sections from a single file', () => {
+      const content = `## ADDED Requirements
+
+### Requirement: New feature
+The system SHALL support this.
+
+## ADDED Constraints
+
+### Constraint: Performance limit
+The system SHALL respond within 200ms.
+`;
+
+      const result = parseDeltaSpecMulti(content, [
+        { section: 'Requirements', pattern: '### Requirement: {name}' },
+        { section: 'Constraints', pattern: '### Constraint: {name}' },
+      ]);
+
+      expect(result.sections).toHaveLength(2);
+
+      const reqSection = result.sections[0];
+      expect(reqSection.sectionName).toBe('Requirements');
+      expect(reqSection.added).toHaveLength(1);
+      expect(reqSection.added[0].name).toBe('New feature');
+
+      const conSection = result.sections[1];
+      expect(conSection.sectionName).toBe('Constraints');
+      expect(conSection.added).toHaveLength(1);
+      expect(conSection.added[0].name).toBe('Performance limit');
+    });
+
+    it('should handle sections with mixed operations', () => {
+      const content = `## ADDED Requirements
+
+### Requirement: New feature
+Description.
+
+## MODIFIED Constraints
+
+### Constraint: Existing limit
+Updated description.
+
+## REMOVED Requirements
+
+### Requirement: Old feature
+`;
+
+      const result = parseDeltaSpecMulti(content, [
+        { section: 'Requirements', pattern: '### Requirement: {name}' },
+        { section: 'Constraints', pattern: '### Constraint: {name}' },
+      ]);
+
+      expect(result.sections).toHaveLength(2);
+
+      const reqSection = result.sections[0];
+      expect(reqSection.added).toHaveLength(1);
+      expect(reqSection.removed).toHaveLength(1);
+      expect(reqSection.sectionPresence.added).toBe(true);
+      expect(reqSection.sectionPresence.removed).toBe(true);
+      expect(reqSection.sectionPresence.modified).toBe(false);
+
+      const conSection = result.sections[1];
+      expect(conSection.modified).toHaveLength(1);
+      expect(conSection.modified[0].name).toBe('Existing limit');
+      expect(conSection.sectionPresence.modified).toBe(true);
+      expect(conSection.sectionPresence.added).toBe(false);
+    });
+
+    it('should return empty sections when no matching deltas found', () => {
+      const content = `## ADDED Requirements
+
+### Requirement: Something
+Text.
+`;
+
+      const result = parseDeltaSpecMulti(content, [
+        { section: 'Requirements', pattern: '### Requirement: {name}' },
+        { section: 'Constraints', pattern: '### Constraint: {name}' },
+      ]);
+
+      expect(result.sections).toHaveLength(2);
+      expect(result.sections[0].added).toHaveLength(1);
+      expect(result.sections[1].added).toHaveLength(0);
+      expect(result.sections[1].sectionPresence.added).toBe(false);
     });
   });
 });

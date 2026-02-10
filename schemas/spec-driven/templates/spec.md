@@ -1,4 +1,4 @@
-<!-- Format configured in schema.yaml under sections.requirement and specValidation -->
+<!-- Format configured in schema.yaml under deltas and validations -->
 
 ## ADDED Requirements
 

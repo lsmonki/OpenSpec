@@ -2,15 +2,16 @@ name: spec-driven
 version: 1
 description: Default OpenSpec workflow - proposal → specs → design → tasks
 
-# Validation configuration for changes (delta specs)
-changeValidation:
-  artifact: verify  # Which artifact type validates changes
+# Compliance configuration for changes (verification against code)
+changeVerify:
+  artifact: specs                            # Which artifact has requirements/scenarios
+  requirementPattern: "### Requirement: {name}"  # Pattern to extract requirement headers
+  scenarioPattern: "#### Scenario: {name}"       # Pattern to extract scenario headers
+  shallMustPattern: "SHALL|MUST"                 # Normative keyword regex; null to disable
 
-# Validation configuration for specs (scenarios)
-specValidation:
-  artifact: specs              # Which artifact contains scenarios
-  pattern: "#### Scenario: {name}"  # Scenario header pattern ({name} = scenario name)
-  required: true               # Whether scenarios are required
+# Required artifact files in each spec folder
+requiredSpecArtifacts:
+  - specs
 
 artifacts:
   - id: proposal
@@ -42,15 +43,25 @@ artifacts:
     generates: "specs/**/*.md"
     description: Detailed specifications for the change
     template: spec.md
-    # Section configuration for spec format validation
-    sections:
-      required:
-        - Purpose
-        - Requirements
-      optional: []
-      requirement:
-        section: Requirements      # Section containing requirements
+    # Delta merge configuration
+    deltas:
+      - section: Requirements      # Section containing requirements
         pattern: "### Requirement: {name}"  # Requirement header pattern
+    # Structural validation rules
+    validations:
+      - pattern: "## Purpose"
+        required: true
+      - pattern: "## Requirements"
+        required: true
+      - pattern: "### Requirement: {name}"
+        required: true
+        scope: Requirements
+      - pattern: "#### Scenario: {name}"
+        required: true
+        eachBlock: Requirements
+      - pattern: "SHALL|MUST"
+        required: true
+        eachBlock: Requirements
     instruction: |
       Create specification files that define WHAT the system should do.
 

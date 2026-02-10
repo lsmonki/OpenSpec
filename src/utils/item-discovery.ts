@@ -22,22 +22,26 @@ export async function getActiveChangeIds(root: string = process.cwd()): Promise<
   }
 }
 
-export async function getSpecIds(root: string = process.cwd()): Promise<string[]> {
+export async function getSpecIds(root: string = process.cwd(), requiredFilenames?: string[]): Promise<string[]> {
   const specsPath = path.join(root, 'openspec', 'specs');
+  const filenames = requiredFilenames ?? ['spec.md'];
   const result: string[] = [];
   try {
     const entries = await fs.readdir(specsPath, { withFileTypes: true });
     for (const entry of entries) {
       if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
 
-      // Check that spec.md exists
-      const specPath = path.join(specsPath, entry.name, 'spec.md');
-      try {
-        await fs.access(specPath);
-        result.push(entry.name);
-      } catch {
-        // skip directories without spec.md
+      // Check that all required artifact files exist
+      let allExist = true;
+      for (const filename of filenames) {
+        try {
+          await fs.access(path.join(specsPath, entry.name, filename));
+        } catch {
+          allExist = false;
+          break;
+        }
       }
+      if (allExist) result.push(entry.name);
     }
   } catch {
     // ignore
