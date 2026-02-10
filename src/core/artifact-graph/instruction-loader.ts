@@ -1,10 +1,12 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import fg from 'fast-glob';
 import { getSchemaDir, resolveSchema } from './resolver.js';
 import { ArtifactGraph } from './graph.js';
 import { detectCompleted } from './state.js';
 import { resolveSchemaForChange } from '../../utils/change-metadata.js';
 import { readProjectConfig, validateConfigRules } from '../project-config.js';
+import { FileSystemUtils } from '../../utils/file-system.js';
 import type { Artifact, CompletedSet } from './types.js';
 
 // Session-level cache for validation warnings (avoid repeating same warnings)
@@ -53,8 +55,10 @@ export interface ArtifactInstructions {
   schemaName: string;
   /** Full path to change directory */
   changeDir: string;
-  /** Output path pattern (e.g., "proposal.md") */
+  /** Output path pattern — may contain globs */
   outputPath: string;
+  /** Concrete output paths resolved from glob patterns (only present when outputPath is a glob) */
+  resolvedOutputPaths?: string[];
   /** Artifact description */
   description: string;
   /** Guidance on how to create this artifact (from schema instruction field) */
@@ -258,12 +262,16 @@ export function generateInstructions(
   const rulesForArtifact = projectConfig?.rules?.[artifactId];
   const configRules = rulesForArtifact && rulesForArtifact.length > 0 ? rulesForArtifact : undefined;
 
+  // Resolve glob outputPath to concrete paths
+  const resolvedOutputPaths = resolveOutputPaths(artifact.generates, context.changeDir);
+
   return {
     changeName: context.changeName,
     artifactId: artifact.id,
     schemaName: context.schemaName,
     changeDir: context.changeDir,
     outputPath: artifact.generates,
+    ...(resolvedOutputPaths ? { resolvedOutputPaths } : {}),
     description: artifact.description,
     instruction: artifact.instruction,
     context: configContext,
@@ -360,4 +368,54 @@ export function formatChangeStatus(context: ChangeContext): ChangeStatus {
     applyRequires,
     artifacts: artifactStatuses,
   };
+}
+
+/**
+ * Resolves a glob-based generates pattern to concrete file paths.
+ * For patterns with a concrete filename (e.g., verify.md) and glob directories,
+ * finds existing subdirectories and produces expected paths.
+ * For patterns with glob filenames, returns existing matching files.
+ * Returns undefined for non-glob patterns.
+ */
+function resolveOutputPaths(generates: string, changeDir: string): string[] | undefined {
+  // Not a glob — outputPath is already concrete
+  if (!generates.includes('*') && !generates.includes('?')) {
+    return undefined;
+  }
+
+  const parts = generates.split('/');
+  const filename = parts[parts.length - 1];
+
+  // If the filename is concrete (e.g., "verify.md") but the directory has globs,
+  // resolve by finding existing directories and producing expected paths
+  if (!filename.includes('*') && !filename.includes('?')) {
+    const globIdx = parts.indexOf('**');
+    if (globIdx >= 0) {
+      const baseDir = parts.slice(0, globIdx).join('/');
+      const suffix = parts.slice(globIdx + 1).join('/');
+      const basePath = path.join(changeDir, baseDir);
+
+      if (fs.existsSync(basePath)) {
+        try {
+          const entries = fs.readdirSync(basePath, { withFileTypes: true });
+          const dirs = entries.filter(e => e.isDirectory()).map(e => e.name);
+          if (dirs.length > 0) {
+            return dirs.map(dir => `${baseDir}/${dir}/${suffix}`).sort();
+          }
+        } catch {
+          // Fall through to glob-based resolution
+        }
+      }
+    }
+  }
+
+  // Fallback: use fast-glob to find existing matching files
+  const fullPattern = path.join(changeDir, generates);
+  const normalizedPattern = FileSystemUtils.toPosixPath(fullPattern);
+  const matches = fg.sync(normalizedPattern, { onlyFiles: true });
+  if (matches.length > 0) {
+    return matches.map(m => FileSystemUtils.toPosixPath(path.relative(changeDir, m))).sort();
+  }
+
+  return undefined;
 }

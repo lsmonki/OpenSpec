@@ -170,7 +170,14 @@ export function printInstructionsText(instructions: ArtifactInstructions, isBloc
 
   // Output location
   console.log('<output>');
-  console.log(`Write to: ${path.join(changeDir, outputPath)}`);
+  if (instructions.resolvedOutputPaths && instructions.resolvedOutputPaths.length > 0) {
+    console.log('Create the following files:');
+    for (const p of instructions.resolvedOutputPaths) {
+      console.log(`  - ${path.join(changeDir, p)}`);
+    }
+  } else {
+    console.log(`Write to: ${path.join(changeDir, outputPath)}`);
+  }
   console.log('</output>');
   console.log();
 
