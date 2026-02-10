@@ -236,11 +236,11 @@ export class ValidateCommand {
     projectRoot: string,
     specId: string,
     config?: SpecValidationConfig
-  ): Promise<{ valid: boolean; issues: Array<{ level: string; path: string; message: string }> }> {
+  ): Promise<{ valid: boolean; issues: Array<{ level: 'ERROR' | 'WARNING' | 'INFO'; path: string; message: string }> }> {
     const artifactFiles = config?.specArtifactFiles ?? [
       { filename: 'spec.md', deltas: [{ section: 'Requirements', pattern: '### Requirement: {name}' }] },
     ];
-    const allIssues: Array<{ level: string; path: string; message: string }> = [];
+    const allIssues: Array<{ level: 'ERROR' | 'WARNING' | 'INFO'; path: string; message: string }> = [];
     let allValid = true;
 
     for (const af of artifactFiles) {
@@ -258,7 +258,7 @@ export class ValidateCommand {
         } catch {
           allValid = false;
           allIssues.push({
-            level: 'ERROR',
+            level: 'ERROR' as const,
             path: `${specId}/${af.filename}`,
             message: `Required artifact file "${af.filename}" not found`,
           });
