@@ -10,6 +10,7 @@ import {
 export interface SpecArtifactFile {
   filename: string;
   deltas?: Array<{ section: string; pattern: string }>;
+  validations?: Array<{ pattern: string; required: boolean; scope?: string; eachBlock?: string }>;
 }
 
 /**
@@ -36,6 +37,7 @@ export function resolveSpecArtifactFiles(schema: SchemaYaml): SpecArtifactFile[]
     return {
       filename: resolveArtifactFilename(artifact),
       deltas: artifact.deltas,
+      validations: artifact.validations,
     };
   });
 }

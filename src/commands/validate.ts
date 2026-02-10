@@ -7,7 +7,7 @@ import { getActiveChangeIds, getSpecIds } from '../utils/item-discovery.js';
 import { nearestMatches } from '../utils/match.js';
 import { readProjectConfig } from '../core/project-config.js';
 import { resolveSchema } from '../core/artifact-graph/resolver.js';
-import { resolveSpecArtifactFiles } from '../core/artifact-graph/schema.js';
+import { resolveSpecArtifactFiles, type SpecArtifactFile } from '../core/artifact-graph/schema.js';
 import type { SchemaYaml } from '../core/artifact-graph/types.js';
 
 type ItemType = 'change' | 'spec';
@@ -237,8 +237,16 @@ export class ValidateCommand {
     specId: string,
     config?: SpecValidationConfig
   ): Promise<{ valid: boolean; issues: Array<{ level: 'ERROR' | 'WARNING' | 'INFO'; path: string; message: string }> }> {
-    const artifactFiles = config?.specArtifactFiles ?? [
-      { filename: 'spec.md', deltas: [{ section: 'Requirements', pattern: '### Requirement: {name}' }] },
+    const defaultDeltas = [{ section: 'Requirements', pattern: '### Requirement: {name}' }];
+    const defaultValidations = [
+      { pattern: '## Purpose', required: true },
+      { pattern: '## Requirements', required: true },
+      { pattern: '### Requirement: {name}', required: true, scope: 'Requirements' },
+      { pattern: '#### Scenario: {name}', required: true, eachBlock: 'Requirements' },
+      { pattern: 'SHALL|MUST', required: true, eachBlock: 'Requirements' },
+    ];
+    const artifactFiles: SpecArtifactFile[] = config?.specArtifactFiles ?? [
+      { filename: 'spec.md', deltas: defaultDeltas, validations: defaultValidations },
     ];
     const allIssues: Array<{ level: 'ERROR' | 'WARNING' | 'INFO'; path: string; message: string }> = [];
     let allValid = true;
@@ -247,8 +255,18 @@ export class ValidateCommand {
       const file = path.join(projectRoot, 'openspec', 'specs', specId, af.filename);
 
       if (af.deltas?.length) {
-        // Delta-bearing artifact: validate as spec
-        const report = await validator.validateSpec(file, config);
+        // Delta-bearing artifact: validate as spec with per-artifact config
+        const fileConfig: SpecValidationConfig = {
+          ...config,
+          requiredSections: af.validations
+            ?.filter(v => v.required && !v.scope && !v.eachBlock)
+            .map(v => v.pattern.replace(/^## /, '')),
+          requirementSection: af.deltas[0].section,
+          requirementPattern: af.deltas[0].pattern,
+          deltaConfigs: af.deltas,
+          validationRules: af.validations,
+        };
+        const report = await validator.validateSpec(file, fileConfig);
         if (!report.valid) allValid = false;
         allIssues.push(...report.issues);
       } else {
