@@ -39,13 +39,10 @@ export interface SpecValidationConfig {
   /** Scenario pattern from changeVerify (default: '#### Scenario: {name}').
    *  Used by validateChangeDeltaSpecs for change validation. */
   changeScenarioPattern?: string;
-  /** Normative keyword pattern from changeVerify (default: 'SHALL|MUST').
-   *  null disables the check. Used by validateChangeDeltaSpecs. */
-  changeShallMustPattern?: string | null;
   /** Resolved spec artifact files from requiredSpecArtifacts.
    *  Each entry has a filename and optional deltas config.
    *  Default: [{ filename: 'spec.md', deltas: [{ section: 'Requirements', pattern: '### Requirement: {name}' }] }] */
-  specArtifactFiles?: Array<{ filename: string; deltas?: Array<{ section: string; pattern: string }> }>;
+  specArtifactFiles?: Array<{ filename: string; deltas?: Array<{ section: string; pattern: string }>; validations?: Array<{ pattern: string; required: boolean; scope?: string; eachBlock?: string }> }>;
 }
 
 export class Validator {
@@ -179,8 +176,6 @@ export class Validator {
     // Change validation patterns from changeVerify (via bridge).
     // Defaults preserve backward compatibility.
     const scenarioPattern = config?.changeScenarioPattern ?? '#### Scenario: {name}';
-    const shallMustPattern: string | null = config?.changeShallMustPattern === undefined
-      ? 'SHALL|MUST' : config.changeShallMustPattern;
 
     // Resolve artifact files to validate.
     // When specArtifactFiles is not provided, build default from legacy config fields.
@@ -237,6 +232,14 @@ export class Validator {
             removed: `REMOVED ${dc.section}`,
             renamed: `RENAMED ${dc.section}`,
           };
+
+          // Derive normative pattern from validationRules eachBlock for this section.
+          // Look for eachBlock rules matching dc.section that aren't scenario patterns.
+          const sectionRules = (artifactFile.validations ?? config?.validationRules ?? [])
+            .filter(r => r.eachBlock === dc.section && r.required);
+          const normativeRule = sectionRules.find(r => !r.pattern.startsWith('#'));
+          const shallMustPattern: string | null = normativeRule?.pattern
+            ?? (config?.validationRules ? null : 'SHALL|MUST');
 
           const plan = parseDeltaSpec(content, deltaConfig);
           if (plan.sectionPresence.added) allSectionNames.push(`## ${deltaSectionNames.added}`);

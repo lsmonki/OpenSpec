@@ -8,8 +8,6 @@ export const ChangeVerifySchema = z.object({
   requirementPattern: z.string().default('### Requirement: {name}'),
   // Pattern to extract scenario headers from specs (e.g., "#### Scenario: {name}")
   scenarioPattern: z.string().default('#### Scenario: {name}'),
-  // Regex for normative keywords in requirements; null to disable (default: "SHALL|MUST")
-  shallMustPattern: z.string().nullable().default('SHALL|MUST'),
 });
 
 // Delta merge configuration: defines a mergeable block section

@@ -129,3 +129,18 @@
 
 - [x] 15.1 Move schema loading (`specArtifactFiles`) out of validation block so it's available for spec sync
 - [x] 15.2 Pass `specArtifactFiles` to `findSpecUpdates()` in archive command (was defaulting to spec.md-only)
+
+## 16. Remove `shallMustPattern` from `changeVerify`
+
+- [x] 16.1 Remove `shallMustPattern` from `ChangeVerifySchema` in `types.ts`
+- [x] 16.2 Remove `changeShallMustPattern` from `SpecValidationConfig` in `validator.ts`
+- [x] 16.3 Derive normative pattern in `validateChangeDeltaSpecs()` from `validationRules` eachBlock rules instead
+- [x] 16.4 Remove bridge fields in `validate.ts` and `specs-apply.ts`
+- [x] 16.5 Remove from `schema.yaml`
+- [x] 16.6 Update tests, docs, CHANGELOG, and change artifacts
+
+## 17. Bug fix: per-artifact validation config
+
+- [x] 17.1 Add `validations` to `SpecArtifactFile` interface
+- [x] 17.2 Populate `validations` in `resolveSpecArtifactFiles()`
+- [x] 17.3 Build per-artifact config in `validateSpecArtifacts()` using each artifact's own deltas/validations

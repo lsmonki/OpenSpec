@@ -52,7 +52,6 @@ changeVerify:
   artifact: "specs"
   requirementPattern: "### Requirement: {name}"
   scenarioPattern: "#### Scenario: {name}"
-  shallMustPattern: "SHALL|MUST"
 
 requiredSpecArtifacts:
   - specs
@@ -240,7 +239,6 @@ changeVerify:
   artifact: "specs"
   requirementPattern: "### Requirement: {name}"
   scenarioPattern: "#### Scenario: {name}"
-  shallMustPattern: "SHALL|MUST"
 
 requiredSpecArtifacts:
   - specs
@@ -300,7 +298,6 @@ changeVerify:
   artifact: string              # which artifact has requirements/scenarios
   requirementPattern: string    # pattern to extract requirement headers
   scenarioPattern: string       # pattern to extract scenario headers
-  shallMustPattern: string|null # regex for normative keywords; null to disable
 
 requiredSpecArtifacts: string[] # which artifact files must exist in each spec folder
 ```
@@ -336,7 +333,6 @@ artifacts:
 | `changeVerify.artifact` | `string` | `"specs"` | Which artifact has requirements/scenarios |
 | `changeVerify.requirementPattern` | `string` | `"### Requirement: {name}"` | Pattern to extract requirement headers |
 | `changeVerify.scenarioPattern` | `string` | `"#### Scenario: {name}"` | Pattern to extract scenario headers |
-| `changeVerify.shallMustPattern` | `string \| null` | `"SHALL\|MUST"` | Regex for normative keywords; `null` to disable |
 | `requiredSpecArtifacts` | `string[]` | `["specs"]` | Artifact files required in each spec folder |
 | `deltas[].section` | `string` | — | Section name for delta operations |
 | `deltas[].pattern` | `string` | — | Block identification pattern |

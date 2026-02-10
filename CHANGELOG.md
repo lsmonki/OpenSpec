@@ -5,7 +5,7 @@
 ### Features
 
 - **Configurable spec formats** — Schemas can now define custom requirement patterns, section headers, scenario formats, and normative keyword validation. New schema fields:
-  - `changeVerify`: Schema-level change verification config (`artifact`, `requirementPattern`, `scenarioPattern`, `shallMustPattern`)
+  - `changeVerify`: Schema-level change verification config (`artifact`, `requirementPattern`, `scenarioPattern`)
   - `requiredSpecArtifacts`: Required artifact files in each spec folder (default: `['specs']`)
   - `deltas[]`: Per-artifact delta merge config (supports multiple sections, e.g., Requirements + Constraints)
   - `validations[]`: Per-artifact structural validation rules with three granularity levels (file-level, scope, eachBlock) — single source of truth for scenarios, normative keywords, etc.

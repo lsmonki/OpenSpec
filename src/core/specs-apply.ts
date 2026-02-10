@@ -475,7 +475,6 @@ export async function applySpecs(
       deltaConfigs: specsArtifact?.deltas,
       validationRules: specsArtifact?.validations,
       changeScenarioPattern: schema.changeVerify?.scenarioPattern,
-      changeShallMustPattern: schema.changeVerify?.shallMustPattern,
       specArtifactFiles: resolveSpecArtifactFiles(schema),
     };
   } catch {

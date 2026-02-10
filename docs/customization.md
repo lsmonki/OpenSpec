@@ -210,7 +210,6 @@ changeVerify:
   artifact: specs                            # Which artifact has requirements/scenarios
   requirementPattern: "### Requirement: {name}"  # Pattern to extract requirement headers
   scenarioPattern: "#### Scenario: {name}"       # Pattern to extract scenario headers
-  shallMustPattern: "SHALL|MUST"                 # Normative keyword regex; null to disable
 ```
 
 | Field | Default | Description |
@@ -218,7 +217,8 @@ changeVerify:
 | `artifact` | `specs` | Which artifact has requirements and scenarios. |
 | `requirementPattern` | `### Requirement: {name}` | Pattern to extract requirement headers from specs. Used by `/opsx:verify`. |
 | `scenarioPattern` | `#### Scenario: {name}` | Pattern to extract scenario headers from specs. Used by `/opsx:verify`. |
-| `shallMustPattern` | `SHALL\|MUST` | Regex for normative keywords in requirements. Set to `null` to disable. |
+
+Normative keyword validation (e.g., `SHALL|MUST`) is configured per-artifact via `validations[]` eachBlock rules, not in `changeVerify`.
 
 #### Required Spec Artifacts (`requiredSpecArtifacts`)
 

@@ -2,7 +2,7 @@
 
 The `configurable-spec-format` change made parsers, validators, and generators read format configuration from the schema instead of hardcoded values. It introduced:
 
-- **Schema-level**: `specValidation` (artifact, pattern, required, shallMustPattern) and `changeValidation` (artifact) — `specValidation` is now eliminated, `changeValidation` is renamed to `changeVerify` and enriched
+- **Schema-level**: `specValidation` (artifact, pattern, required, shallMustPattern) and `changeValidation` (artifact) — `specValidation` is now eliminated, `changeValidation` is renamed to `changeVerify` and enriched with extraction patterns only (normative validation moved to `validations[]`)
 - **Artifact-level**: `sections` (required, optional, requirement: { section, pattern }) — replaced by `deltas[]` and `validations[]`
 
 Current state of the code:
@@ -76,7 +76,6 @@ export const ChangeVerifySchema = z.object({
   artifact: z.string().default('specs'),
   requirementPattern: z.string().default('### Requirement: {name}'),
   scenarioPattern: z.string().default('#### Scenario: {name}'),
-  shallMustPattern: z.string().nullable().default('SHALL|MUST'),
 });
 
 // Update ArtifactSchema

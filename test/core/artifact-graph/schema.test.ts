@@ -219,7 +219,6 @@ artifacts:
         artifact: 'specs',
         requirementPattern: '### Requirement: {name}',
         scenarioPattern: '#### Scenario: {name}',
-        shallMustPattern: 'SHALL|MUST',
       });
       expect(schema.requiredSpecArtifacts).toEqual(['specs']);
     });
@@ -246,7 +245,6 @@ artifacts:
         artifact: 'verify-custom',
         requirementPattern: '## RF: {name}',
         scenarioPattern: '### Scenario: {name}',
-        shallMustPattern: 'SHALL|MUST',
       });
       expect(schema.requiredSpecArtifacts).toEqual(['specs', 'verify']);
     });

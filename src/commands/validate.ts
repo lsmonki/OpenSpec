@@ -48,7 +48,6 @@ function buildValidationConfig(schema: SchemaYaml): SpecValidationConfig {
     deltaConfigs: specsArtifact?.deltas,
     validationRules: specsArtifact?.validations,
     changeScenarioPattern: schema.changeVerify?.scenarioPattern,
-    changeShallMustPattern: schema.changeVerify?.shallMustPattern,
     specArtifactFiles: resolveSpecArtifactFiles(schema),
   };
 }

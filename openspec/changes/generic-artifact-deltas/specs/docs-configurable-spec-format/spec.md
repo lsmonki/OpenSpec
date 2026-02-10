@@ -14,13 +14,13 @@ The documentation SHALL include a "Custom Spec Formats" section in `docs/customi
 
 ### Requirement: Document changeVerify and requiredSpecArtifacts options
 
-The documentation SHALL explain all `changeVerify` configuration options (`requirementPattern`, `scenarioPattern`, `shallMustPattern`) and the `requiredSpecArtifacts` field with examples.
+The documentation SHALL explain all `changeVerify` configuration options (`requirementPattern`, `scenarioPattern`) and the `requiredSpecArtifacts` field with examples. Normative keyword validation is configured per-artifact via `validations[]` eachBlock rules.
 
 #### Scenario: User configures change verification patterns
 
 - **WHEN** user reads the `changeVerify` documentation
-- **THEN** they understand how to set `requirementPattern`, `scenarioPattern`, and `shallMustPattern`
-- **AND** an example shows the default patterns and how to disable normative validation with `null`
+- **THEN** they understand how to set `requirementPattern` and `scenarioPattern`
+- **AND** an example shows the default patterns
 
 #### Scenario: User configures required spec artifacts
 

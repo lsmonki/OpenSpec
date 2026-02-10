@@ -88,7 +88,7 @@ The validate command SHALL load the project's schema configuration and use it fo
 
 #### Scenario: Fallback to defaults without project config
 - **WHEN** executing `openspec validate` without a project `.openspec.yaml` or without a `schema` field
-- **THEN** the validator uses default validation rules (shallMustPattern: "SHALL|MUST", scenarios required, etc.)
+- **THEN** the validator uses default validation rules (normative keywords via `validations[]` eachBlock, scenarios required, etc.)
 
 ### Requirement: Schema-Aware Delta Validation
 The validator SHALL validate delta specs using headers derived from the artifact's `deltas[]` configuration instead of `sections.requirement`.

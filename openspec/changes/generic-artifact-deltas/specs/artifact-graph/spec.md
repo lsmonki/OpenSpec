@@ -6,16 +6,12 @@
 The system SHALL support optional schema-level configuration for `changeVerify` and `requiredSpecArtifacts`.
 
 #### Scenario: Load changeVerify config
-- **WHEN** a schema.yaml contains a `changeVerify` block with `artifact`, `requirementPattern`, `scenarioPattern`, and `shallMustPattern` fields
+- **WHEN** a schema.yaml contains a `changeVerify` block with `artifact`, `requirementPattern`, and `scenarioPattern` fields
 - **THEN** the loaded schema includes the complete `changeVerify` object
 
 #### Scenario: Apply changeVerify defaults
 - **WHEN** a schema.yaml omits the `changeVerify` block
-- **THEN** the system defaults to `{ artifact: "specs", requirementPattern: "### Requirement: {name}", scenarioPattern: "#### Scenario: {name}", shallMustPattern: "SHALL|MUST" }`
-
-#### Scenario: Disable normative keyword validation
-- **WHEN** a schema.yaml contains `changeVerify.shallMustPattern: null`
-- **THEN** the loaded schema includes `changeVerify.shallMustPattern` as null (validation disabled)
+- **THEN** the system defaults to `{ artifact: "specs", requirementPattern: "### Requirement: {name}", scenarioPattern: "#### Scenario: {name}" }`
 
 #### Scenario: Load requiredSpecArtifacts config
 - **WHEN** a schema.yaml contains a `requiredSpecArtifacts` array
