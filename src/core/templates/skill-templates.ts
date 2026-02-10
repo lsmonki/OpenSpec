@@ -802,7 +802,13 @@ This is an **agent-driven** operation - you will read delta specs and directly e
    **IMPORTANT: A capability may have multiple delta files** (e.g., spec.md + verify.md).
    Each file corresponds to a different artifact in the schema.
 
-   Read the schema YAML at \`openspec/schemas/<schema-name>/schema.yaml\` (or use defaults if not found).
+   Find the schema path and read its config:
+   \`\`\`bash
+   openspec schema which <schema-name> --json
+   \`\`\`
+   This returns JSON with a \`path\` field — read \`<path>/schema.yaml\` for the full artifact config.
+   If not found, use defaults.
+
    For each artifact that generates under \`specs/\`, check its \`deltas[]\` config:
    - \`deltas[].section\`: Section name (default: \`Requirements\`)
    - \`deltas[].pattern\`: Header pattern (default: \`### Requirement: {name}\`)
@@ -2512,7 +2518,13 @@ This is an **agent-driven** operation - you will read delta specs and directly e
    **IMPORTANT: A capability may have multiple delta files** (e.g., spec.md + verify.md).
    Each file corresponds to a different artifact in the schema.
 
-   Read the schema YAML at \`openspec/schemas/<schema-name>/schema.yaml\` (or use defaults if not found).
+   Find the schema path and read its config:
+   \`\`\`bash
+   openspec schema which <schema-name> --json
+   \`\`\`
+   This returns JSON with a \`path\` field — read \`<path>/schema.yaml\` for the full artifact config.
+   If not found, use defaults.
+
    For each artifact that generates under \`specs/\`, check its \`deltas[]\` config:
    - \`deltas[].section\`: Section name (default: \`Requirements\`)
    - \`deltas[].pattern\`: Header pattern (default: \`### Requirement: {name}\`)
@@ -2670,7 +2682,7 @@ export function getVerifyChangeSkillTemplate(): SkillTemplate {
 
    **Spec file loading** (for each spec folder in \`openspec/changes/<name>/specs/<capability>/\`):
    - Load ALL \`.md\` files in the folder — each corresponds to a different artifact in the schema
-   - Read \`schema.yaml\` to understand each file's role:
+   - Read schema config to understand each file's role (use \`openspec schema which <schema-name> --json\` to find the schema path, then read \`<path>/schema.yaml\`):
      - Files with \`deltas[]\` config contain requirements/items with delta operations
      - \`changeVerify.artifact\` indicates which artifact has verification scenarios
      - \`changeVerify.requirementPattern\` and \`changeVerify.scenarioPattern\` for extraction patterns
@@ -2697,7 +2709,7 @@ export function getVerifyChangeSkillTemplate(): SkillTemplate {
 
    **Spec Coverage**:
    - If delta specs exist in \`openspec/changes/<name>/specs/\`:
-     - Read schema format config from \`openspec/schemas/<schema-name>/schema.yaml\` or use defaults:
+     - Read schema format config (use \`openspec schema which <schema-name> --json\` → read \`<path>/schema.yaml\`) or use defaults:
        - \`deltas[].pattern\` (default: \`### Requirement: {name}\`)
        - \`changeVerify.scenarioPattern\` (default: \`#### Scenario: {name}\`)
      - Extract all requirements using the configured pattern
@@ -3278,7 +3290,7 @@ export function getOpsxVerifyCommandTemplate(): CommandTemplate {
 
    **Spec file loading** (for each spec folder in \`openspec/changes/<name>/specs/<capability>/\`):
    - Load ALL \`.md\` files in the folder — each corresponds to a different artifact in the schema
-   - Read \`schema.yaml\` to understand each file's role:
+   - Read schema config to understand each file's role (use \`openspec schema which <schema-name> --json\` to find the schema path, then read \`<path>/schema.yaml\`):
      - Files with \`deltas[]\` config contain requirements/items with delta operations
      - \`changeVerify.artifact\` indicates which artifact has verification scenarios
      - \`changeVerify.requirementPattern\` and \`changeVerify.scenarioPattern\` for extraction patterns
@@ -3305,7 +3317,7 @@ export function getOpsxVerifyCommandTemplate(): CommandTemplate {
 
    **Spec Coverage**:
    - If delta specs exist in \`openspec/changes/<name>/specs/\`:
-     - Read schema format config from \`openspec/schemas/<schema-name>/schema.yaml\` or use defaults:
+     - Read schema format config (use \`openspec schema which <schema-name> --json\` → read \`<path>/schema.yaml\`) or use defaults:
        - \`deltas[].pattern\` (default: \`### Requirement: {name}\`)
        - \`changeVerify.scenarioPattern\` (default: \`#### Scenario: {name}\`)
      - Extract all requirements using the configured pattern
