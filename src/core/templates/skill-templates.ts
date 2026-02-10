@@ -491,7 +491,12 @@ Always trust the status output over assumptions about the workflow.
 
 For spec-like artifacts (ones that generate under \`specs/\`), each capability listed in the proposal needs
 its own folder. The schema may require multiple files per capability (e.g., spec.md + verify.md as separate
-artifacts with their own dependency order). Check the artifact's \`instruction\` field to understand what to create.
+artifacts with their own dependency order). To know which files are expected per capability, run:
+\`\`\`bash
+openspec schema show --json
+\`\`\`
+The \`specArtifactFiles\` array lists each file with its filename, deltas config, and validations.
+Each file corresponds to a separate artifact — create them one at a time following the status output.
 
 **Guardrails**
 - Create ONE artifact per invocation
@@ -802,12 +807,12 @@ This is an **agent-driven** operation - you will read delta specs and directly e
    **IMPORTANT: A capability may have multiple delta files** (e.g., spec.md + verify.md).
    Each file corresponds to a different artifact in the schema.
 
-   Find the schema path and read its config:
+   Get the schema config:
    \`\`\`bash
-   openspec schema which <schema-name> --json
+   openspec schema show <schema-name> --json
    \`\`\`
-   This returns JSON with a \`path\` field — read \`<path>/schema.yaml\` for the full artifact config.
-   If not found, use defaults.
+   This returns the full parsed config including \`specArtifactFiles\` (which files each capability needs)
+   and each artifact's \`deltas[]\` config. If not available, use defaults.
 
    For each artifact that generates under \`specs/\`, check its \`deltas[]\` config:
    - \`deltas[].section\`: Section name (default: \`Requirements\`)
@@ -1847,7 +1852,12 @@ Always trust the status output over assumptions about the workflow.
 
 For spec-like artifacts (ones that generate under \`specs/\`), each capability listed in the proposal needs
 its own folder. The schema may require multiple files per capability (e.g., spec.md + verify.md as separate
-artifacts with their own dependency order). Check the artifact's \`instruction\` field to understand what to create.
+artifacts with their own dependency order). To know which files are expected per capability, run:
+\`\`\`bash
+openspec schema show --json
+\`\`\`
+The \`specArtifactFiles\` array lists each file with its filename, deltas config, and validations.
+Each file corresponds to a separate artifact — create them one at a time following the status output.
 
 **Guardrails**
 - Create ONE artifact per invocation
@@ -2518,12 +2528,12 @@ This is an **agent-driven** operation - you will read delta specs and directly e
    **IMPORTANT: A capability may have multiple delta files** (e.g., spec.md + verify.md).
    Each file corresponds to a different artifact in the schema.
 
-   Find the schema path and read its config:
+   Get the schema config:
    \`\`\`bash
-   openspec schema which <schema-name> --json
+   openspec schema show <schema-name> --json
    \`\`\`
-   This returns JSON with a \`path\` field — read \`<path>/schema.yaml\` for the full artifact config.
-   If not found, use defaults.
+   This returns the full parsed config including \`specArtifactFiles\` (which files each capability needs)
+   and each artifact's \`deltas[]\` config. If not available, use defaults.
 
    For each artifact that generates under \`specs/\`, check its \`deltas[]\` config:
    - \`deltas[].section\`: Section name (default: \`Requirements\`)
@@ -2682,7 +2692,7 @@ export function getVerifyChangeSkillTemplate(): SkillTemplate {
 
    **Spec file loading** (for each spec folder in \`openspec/changes/<name>/specs/<capability>/\`):
    - Load ALL \`.md\` files in the folder — each corresponds to a different artifact in the schema
-   - Read schema config to understand each file's role (use \`openspec schema which <schema-name> --json\` to find the schema path, then read \`<path>/schema.yaml\`):
+   - Read schema config to understand each file's role (use \`openspec schema show <schema-name> --json\`):
      - Files with \`deltas[]\` config contain requirements/items with delta operations
      - \`changeVerify.artifact\` indicates which artifact has verification scenarios
      - \`changeVerify.requirementPattern\` and \`changeVerify.scenarioPattern\` for extraction patterns
@@ -2709,7 +2719,7 @@ export function getVerifyChangeSkillTemplate(): SkillTemplate {
 
    **Spec Coverage**:
    - If delta specs exist in \`openspec/changes/<name>/specs/\`:
-     - Read schema format config (use \`openspec schema which <schema-name> --json\` → read \`<path>/schema.yaml\`) or use defaults:
+     - Read schema format config (use \`openspec schema show <schema-name> --json\`) or use defaults:
        - \`deltas[].pattern\` (default: \`### Requirement: {name}\`)
        - \`changeVerify.scenarioPattern\` (default: \`#### Scenario: {name}\`)
      - Extract all requirements using the configured pattern
@@ -3290,7 +3300,7 @@ export function getOpsxVerifyCommandTemplate(): CommandTemplate {
 
    **Spec file loading** (for each spec folder in \`openspec/changes/<name>/specs/<capability>/\`):
    - Load ALL \`.md\` files in the folder — each corresponds to a different artifact in the schema
-   - Read schema config to understand each file's role (use \`openspec schema which <schema-name> --json\` to find the schema path, then read \`<path>/schema.yaml\`):
+   - Read schema config to understand each file's role (use \`openspec schema show <schema-name> --json\`):
      - Files with \`deltas[]\` config contain requirements/items with delta operations
      - \`changeVerify.artifact\` indicates which artifact has verification scenarios
      - \`changeVerify.requirementPattern\` and \`changeVerify.scenarioPattern\` for extraction patterns
@@ -3317,7 +3327,7 @@ export function getOpsxVerifyCommandTemplate(): CommandTemplate {
 
    **Spec Coverage**:
    - If delta specs exist in \`openspec/changes/<name>/specs/\`:
-     - Read schema format config (use \`openspec schema which <schema-name> --json\` → read \`<path>/schema.yaml\`) or use defaults:
+     - Read schema format config (use \`openspec schema show <schema-name> --json\`) or use defaults:
        - \`deltas[].pattern\` (default: \`### Requirement: {name}\`)
        - \`changeVerify.scenarioPattern\` (default: \`#### Scenario: {name}\`)
      - Extract all requirements using the configured pattern
