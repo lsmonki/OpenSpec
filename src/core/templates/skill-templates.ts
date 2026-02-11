@@ -450,15 +450,13 @@ export function getContinueChangeSkillTemplate(): SkillTemplate {
      - \`rules\`: Artifact-specific rules (constraints for you - do NOT include in output)
      - \`template\`: The structure to use for your output file
      - \`instruction\`: Schema-specific guidance
-     - \`outputPath\`: Where to write the artifact (may be a glob pattern for spec-like artifacts)
-     - \`resolvedOutputPaths\`: Concrete file paths to create (present when outputPath is a glob — use THESE paths)
+     - \`outputPath\`: Where to write the artifact
      - \`dependencies\`: Completed artifacts to read for context
    - **Create the artifact file**:
      - Read any completed dependency files for context
      - Use \`template\` as the structure - fill in its sections
      - Apply \`context\` and \`rules\` as constraints when writing - but do NOT copy them into the file
-     - Write to the paths from \`resolvedOutputPaths\` (if present) or \`outputPath\`
-     - For spec-like artifacts: create ONE file per path in \`resolvedOutputPaths\` (one per capability)
+     - Write to the output path specified in instructions
    - Show what was created and what's now unlocked
    - STOP after creating ONE artifact
 
@@ -726,8 +724,7 @@ export function getFfChangeSkillTemplate(): SkillTemplate {
         - \`rules\`: Artifact-specific rules (constraints for you - do NOT include in output)
         - \`template\`: The structure to use for your output file
         - \`instruction\`: Schema-specific guidance for this artifact type
-        - \`outputPath\`: Where to write the artifact (may be a glob pattern for spec-like artifacts)
-     - \`resolvedOutputPaths\`: Concrete file paths to create (present when outputPath is a glob — use THESE paths)
+        - \`outputPath\`: Where to write the artifact
         - \`dependencies\`: Completed artifacts to read for context
       - Read any completed dependency files for context
       - Create the artifact file using \`template\` as the structure
@@ -1814,15 +1811,13 @@ export function getOpsxContinueCommandTemplate(): CommandTemplate {
      - \`rules\`: Artifact-specific rules (constraints for you - do NOT include in output)
      - \`template\`: The structure to use for your output file
      - \`instruction\`: Schema-specific guidance
-     - \`outputPath\`: Where to write the artifact (may be a glob pattern for spec-like artifacts)
-     - \`resolvedOutputPaths\`: Concrete file paths to create (present when outputPath is a glob — use THESE paths)
+     - \`outputPath\`: Where to write the artifact
      - \`dependencies\`: Completed artifacts to read for context
    - **Create the artifact file**:
      - Read any completed dependency files for context
      - Use \`template\` as the structure - fill in its sections
      - Apply \`context\` and \`rules\` as constraints when writing - but do NOT copy them into the file
-     - Write to the paths from \`resolvedOutputPaths\` (if present) or \`outputPath\`
-     - For spec-like artifacts: create ONE file per path in \`resolvedOutputPaths\` (one per capability)
+     - Write to the output path specified in instructions
    - Show what was created and what's now unlocked
    - STOP after creating ONE artifact
 
@@ -2087,8 +2082,7 @@ export function getOpsxFfCommandTemplate(): CommandTemplate {
         - \`rules\`: Artifact-specific rules (constraints for you - do NOT include in output)
         - \`template\`: The structure to use for your output file
         - \`instruction\`: Schema-specific guidance for this artifact type
-        - \`outputPath\`: Where to write the artifact (may be a glob pattern for spec-like artifacts)
-     - \`resolvedOutputPaths\`: Concrete file paths to create (present when outputPath is a glob — use THESE paths)
+        - \`outputPath\`: Where to write the artifact
         - \`dependencies\`: Completed artifacts to read for context
       - Read any completed dependency files for context
       - Create the artifact file using \`template\` as the structure

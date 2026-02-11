@@ -10,8 +10,7 @@
   - `deltas[]`: Per-artifact delta merge config (supports multiple sections, e.g., Requirements + Constraints)
   - `validations[]`: Per-artifact structural validation rules with three granularity levels (file-level, scope, eachBlock) — single source of truth for scenarios, normative keywords, etc.
 - **`openspec schema show` command** — Inspect the full parsed configuration of any schema, including resolved `specArtifactFiles`, `changeVerify`, artifact definitions, and apply config. Name is optional (defaults to project schema).
-- **`resolvedOutputPaths` in `openspec instructions`** — When an artifact's `generates` is a glob (e.g., `specs/**/verify.md`), the instructions output now includes `resolvedOutputPaths` with concrete file paths (e.g., `specs/gestion-usuarios/verify.md`), resolved from existing spec directories.
-- **Schema-aware skill templates** — Skill prompts no longer hardcode `spec.md`. They use `openspec schema show --json` to discover schema configuration and `resolvedOutputPaths` from instructions for concrete file paths, enabling multi-file spec workflows (e.g., `spec.md` + `verify.md` per capability).
+- **Schema-aware skill templates** — Skill prompts no longer hardcode `spec.md`. They use `openspec schema show --json` to discover schema configuration and `specArtifactFiles`, enabling multi-file spec workflows (e.g., `spec.md` + `verify.md` per capability).
 
 ## 1.1.1
 

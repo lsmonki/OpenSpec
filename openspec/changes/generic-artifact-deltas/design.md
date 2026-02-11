@@ -382,22 +382,7 @@ spec.requirements.forEach((req, index) => {
 
 The prompt structure stays the same — "read the schema, extract config, use defaults if missing" — just the field paths change.
 
-### 12. `resolvedOutputPaths` in Instructions Output
-
-**Decision**: When an artifact's `generates` field is a glob pattern (e.g., `specs/**/verify.md`), `generateInstructions()` resolves it to concrete file paths and includes them as `resolvedOutputPaths` in the output.
-
-Resolution logic:
-- If `generates` is not a glob → `resolvedOutputPaths` is omitted (the `outputPath` itself is sufficient)
-- If the glob has a concrete filename (e.g., `specs/**/verify.md`) → scan the change directory's `specs/` for existing subdirectories, produce one path per directory (e.g., `specs/gestion-usuarios/verify.md`)
-- If the glob has a wildcard filename (e.g., `specs/**/*.md`) → use `fast-glob` to find existing matching files
-
-**Rationale**: The AI agent needs concrete file paths to know which files to create. A glob like `specs/**/verify.md` doesn't tell the AI which capabilities need a verify.md. The resolution uses the existing directory structure (created by prior artifacts like `specs`) as the source of truth.
-
-**Alternatives considered**:
-- Have the AI resolve globs itself: Unreliable — the AI doesn't have glob resolution logic and would need to scan directories
-- Add a separate `capabilities` list to the schema: Redundant — the directory structure already encodes this
-
-### 13. `openspec schema show` Command
+### 12. `openspec schema show` Command
 
 **Decision**: Add `openspec schema show [name] --json` command that outputs the full parsed schema configuration. The name argument is optional — defaults to the project's configured schema (from `openspec/config.yaml`) or `spec-driven`.
 
@@ -414,12 +399,12 @@ Output includes:
 - `openspec schema which --json` with schema content: Would require reading the file separately. `schema show` returns the parsed config directly.
 - Have skills read `schema.yaml` by path: Fragile — doesn't work when the schema is a built-in from the package directory
 
-### 14. Skill Templates Use `openspec schema show --json` for Schema Discovery
+### 13. Skill Templates Use `openspec schema show --json` for Schema Discovery
 
-**Decision**: All skill/command templates use `openspec schema show --json` instead of reading schema files directly. Templates reference `specArtifactFiles` for multi-file spec awareness and `resolvedOutputPaths` from instructions for concrete file paths.
+**Decision**: All skill/command templates use `openspec schema show --json` instead of reading schema files directly. Templates reference `specArtifactFiles` for multi-file spec awareness.
 
 Changes to skill templates:
-- **continue/ff**: Instruct AI to use `resolvedOutputPaths` when creating spec-like artifacts
+- **continue/ff**: Follow `openspec status --json` strictly, use `specArtifactFiles` to know which files each capability needs
 - **sync/archive**: Instruct AI to process ALL `.md` files per capability, not just `spec.md`
 - **verify/explore**: Load all files from spec folders
 - **apply**: No hardcoded context file list — follows schema's artifact definitions

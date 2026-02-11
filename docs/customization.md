@@ -486,18 +486,6 @@ To see what instructions the AI receives for a specific artifact (useful for deb
 openspec instructions <artifact-id> --change "<name>" --json
 ```
 
-For artifacts with glob `generates` patterns (like `specs/**/verify.md`), the output includes `resolvedOutputPaths` — concrete file paths resolved from existing spec directories:
-
-```json
-{
-  "outputPath": "specs/**/verify.md",
-  "resolvedOutputPaths": [
-    "specs/user-auth/verify.md",
-    "specs/data-export/verify.md"
-  ]
-}
-```
-
 ---
 
 > **Note:** OpenSpec also supports user-level schemas at `~/.local/share/openspec/schemas/` for sharing across projects, but project-level schemas in `openspec/schemas/` are recommended since they're version-controlled with your code.
