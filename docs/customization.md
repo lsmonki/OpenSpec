@@ -459,6 +459,45 @@ Source: project
 Path: /path/to/project/openspec/schemas/my-workflow
 ```
 
+### Inspect Schema Configuration
+
+To see the full parsed configuration of a schema (including resolved defaults):
+
+```bash
+# Show the project's configured schema (or spec-driven if none configured)
+openspec schema show --json
+
+# Show a specific schema
+openspec schema show my-workflow --json
+```
+
+Output includes:
+- `specArtifactFiles`: Resolved filenames per required spec artifact (e.g., `spec.md`, `verify.md`)
+- `changeVerify`: Patterns for requirement/scenario extraction
+- `artifacts`: All artifact definitions with `deltas`, `validations`, and `instruction`
+- `apply`: Apply phase configuration
+- `source`: Where the schema was resolved from (`project`, `user`, or `package`)
+
+### Inspect Artifact Instructions
+
+To see what instructions the AI receives for a specific artifact (useful for debugging why an artifact isn't being created correctly):
+
+```bash
+openspec instructions <artifact-id> --change "<name>" --json
+```
+
+For artifacts with glob `generates` patterns (like `specs/**/verify.md`), the output includes `resolvedOutputPaths` — concrete file paths resolved from existing spec directories:
+
+```json
+{
+  "outputPath": "specs/**/verify.md",
+  "resolvedOutputPaths": [
+    "specs/user-auth/verify.md",
+    "specs/data-export/verify.md"
+  ]
+}
+```
+
 ---
 
 > **Note:** OpenSpec also supports user-level schemas at `~/.local/share/openspec/schemas/` for sharing across projects, but project-level schemas in `openspec/schemas/` are recommended since they're version-controlled with your code.

@@ -144,3 +144,27 @@
 - [x] 17.1 Add `validations` to `SpecArtifactFile` interface
 - [x] 17.2 Populate `validations` in `resolveSpecArtifactFiles()`
 - [x] 17.3 Build per-artifact config in `validateSpecArtifacts()` using each artifact's own deltas/validations
+
+## 18. Skill template multi-file awareness
+
+- [x] 18.1 Remove 24 hardcoded `spec.md` references across 12 skill/command template functions in `skill-templates.ts`
+- [x] 18.2 Update continue/ff templates to follow `openspec status --json` strictly instead of hardcoded `proposal → specs → design → tasks`
+- [x] 18.3 Update sync/archive templates to process all `.md` files per capability directory
+- [x] 18.4 Update verify/explore templates to load all files from spec folders
+- [x] 18.5 Update apply templates to remove hardcoded context file list
+- [x] 18.6 Add `resolvedOutputPaths` guidance to continue/ff templates: "use THESE paths when present"
+
+## 19. `openspec schema show` command
+
+- [x] 19.1 Implement `schema show [name]` subcommand in `src/commands/schema.ts`
+- [x] 19.2 Make name argument optional — default to project config schema or `spec-driven`
+- [x] 19.3 Output includes `specArtifactFiles`, `changeVerify`, `artifacts`, `apply`, `source`, `path`
+- [x] 19.4 Update all skill templates to use `openspec schema show --json` instead of `schema which`
+
+## 20. `resolvedOutputPaths` in instructions output
+
+- [x] 20.1 Add `resolvedOutputPaths` field to `ArtifactInstructions` interface in `instruction-loader.ts`
+- [x] 20.2 Implement `resolveOutputPaths()` function: resolve globs to concrete paths from existing spec directories
+- [x] 20.3 Wire into `generateInstructions()` — populate when `generates` is a glob
+- [x] 20.4 Update `printInstructionsText()` in `instructions.ts` to show resolved paths
+- [x] 20.5 Update skill templates to reference `resolvedOutputPaths` for spec-like artifacts

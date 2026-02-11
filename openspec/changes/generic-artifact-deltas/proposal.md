@@ -15,6 +15,9 @@ The `configurable-spec-format` change introduced schema-driven spec format confi
 - **Rename `changeValidation` → `changeVerify`**: Avoids naming confusion.
 - **Multi-file delta merge in sync/archive**: Any artifact listed in `requiredSpecArtifacts` can define its own `deltas[]`, enabling delta merge for `verify.md`, `constraints.md`, etc. — not just `spec.md`. Artifact filenames are resolved from `generates` (last concrete segment) or `template` (fallback).
 - **Runtime uses `requiredSpecArtifacts`**: All hardcoded `spec.md` references in sync, validation, archive, and item discovery are replaced by schema-driven artifact file resolution.
+- **`resolvedOutputPaths` in instructions output**: When an artifact's `generates` pattern is a glob (e.g., `specs/**/verify.md`), `openspec instructions` now resolves it to concrete file paths based on existing spec directories. This lets AI know exactly which files to create instead of interpreting glob patterns.
+- **`openspec schema show` command**: New CLI command that outputs the full parsed schema configuration including `specArtifactFiles`, `changeVerify`, artifact definitions with `deltas`/`validations`, and apply config. Name argument is optional — defaults to the project's configured schema or `spec-driven`.
+- **Schema-aware skill templates**: All skill/command templates no longer hardcode `spec.md`. They use `openspec schema show --json` to discover the schema configuration and `resolvedOutputPaths` from instructions to know exactly which files to create per capability.
 
 ---
 
@@ -345,14 +348,17 @@ artifacts:
 
 ## Dynamic Prompts
 
-Skills read format configuration from the schema at runtime. Before generating specs or deltas, the AI reads:
+Skills read format configuration from the schema at runtime via `openspec schema show --json`. Before generating specs or deltas, the AI reads:
 
-1. `deltas[].section` → delta section headers (e.g., `## ADDED Requirements`)
-2. `deltas[].pattern` → block format (e.g., `### Requirement: {name}`)
-3. `validations[]` → structural rules to follow
-4. `changeVerify` → patterns for requirement/scenario extraction in `/opsx:verify`
+1. `specArtifactFiles` → which files each capability needs (e.g., `spec.md` + `verify.md`)
+2. `deltas[].section` → delta section headers (e.g., `## ADDED Requirements`)
+3. `deltas[].pattern` → block format (e.g., `### Requirement: {name}`)
+4. `validations[]` → structural rules to follow
+5. `changeVerify` → patterns for requirement/scenario extraction in `/opsx:verify`
 
-This approach requires no code changes to the skill loading system — prompts instruct the AI to read the schema and adapt.
+When creating spec-like artifacts, the AI uses `resolvedOutputPaths` from `openspec instructions --json` to know exactly which files to create (e.g., `specs/gestion-usuarios/verify.md` instead of the glob `specs/**/verify.md`).
+
+This approach requires no code changes to the skill loading system — prompts instruct the AI to query the CLI for schema config and follow the resolved paths.
 
 ---
 
