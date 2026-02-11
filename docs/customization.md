@@ -461,7 +461,7 @@ Path: /path/to/project/openspec/schemas/my-workflow
 
 ### Inspect Schema Configuration
 
-To see the full parsed configuration of a schema (including resolved defaults):
+To see the parsed configuration of a schema (including resolved defaults):
 
 ```bash
 # Show the project's configured schema (or spec-driven if none configured)
@@ -469,13 +469,18 @@ openspec schema show --json
 
 # Show a specific schema
 openspec schema show my-workflow --json
+
+# Include instruction fields (omitted by default to save tokens)
+openspec schema show --json --full
 ```
+
+By default, `instruction` fields on artifacts and `apply` are omitted to reduce output size (~65% smaller). Use `--full` to include them when debugging.
 
 Output includes:
 - `specArtifactFiles`: Resolved filenames per required spec artifact (e.g., `spec.md`, `verify.md`)
 - `changeVerify`: Patterns for requirement/scenario extraction
-- `artifacts`: All artifact definitions with `deltas`, `validations`, and `instruction`
-- `apply`: Apply phase configuration
+- `artifacts`: All artifact definitions with `deltas` and `validations` (plus `instruction` with `--full`)
+- `apply`: Apply phase configuration (plus `instruction` with `--full`)
 - `source`: Where the schema was resolved from (`project`, `user`, or `package`)
 
 ### Inspect Artifact Instructions

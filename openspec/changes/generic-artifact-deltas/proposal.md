@@ -15,7 +15,7 @@ The `configurable-spec-format` change introduced schema-driven spec format confi
 - **Rename `changeValidation` → `changeVerify`**: Avoids naming confusion.
 - **Multi-file delta merge in sync/archive**: Any artifact listed in `requiredSpecArtifacts` can define its own `deltas[]`, enabling delta merge for `verify.md`, `constraints.md`, etc. — not just `spec.md`. Artifact filenames are resolved from `generates` (last concrete segment) or `template` (fallback).
 - **Runtime uses `requiredSpecArtifacts`**: All hardcoded `spec.md` references in sync, validation, archive, and item discovery are replaced by schema-driven artifact file resolution.
-- **`openspec schema show` command**: New CLI command that outputs the full parsed schema configuration including `specArtifactFiles`, `changeVerify`, artifact definitions with `deltas`/`validations`, and apply config. Name argument is optional — defaults to the project's configured schema or `spec-driven`.
+- **`openspec schema show` command**: New CLI command that outputs the parsed schema configuration including `specArtifactFiles`, `changeVerify`, artifact definitions with `deltas`/`validations`, and apply config. Name argument is optional — defaults to the project's configured schema or `spec-driven`. By default omits `instruction` fields to save tokens; `--full` includes them.
 - **Schema-aware skill templates**: All skill/command templates no longer hardcode `spec.md`. They use `openspec schema show --json` to discover the schema configuration and `specArtifactFiles` to know which files each capability needs.
 
 ---

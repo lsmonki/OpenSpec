@@ -158,3 +158,4 @@
 - [x] 19.2 Make name argument optional — default to project config schema or `spec-driven`
 - [x] 19.3 Output includes `specArtifactFiles`, `changeVerify`, `artifacts`, `apply`, `source`, `path`
 - [x] 19.4 Update all skill templates to use `openspec schema show --json` instead of `schema which`
+- [x] 19.5 Omit `instruction` fields by default to save tokens; add `--full` flag to include them

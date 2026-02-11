@@ -384,20 +384,23 @@ The prompt structure stays the same — "read the schema, extract config, use de
 
 ### 12. `openspec schema show` Command
 
-**Decision**: Add `openspec schema show [name] --json` command that outputs the full parsed schema configuration. The name argument is optional — defaults to the project's configured schema (from `openspec/config.yaml`) or `spec-driven`.
+**Decision**: Add `openspec schema show [name] --json` command that outputs the parsed schema configuration. The name argument is optional — defaults to the project's configured schema (from `openspec/config.yaml`) or `spec-driven`.
+
+By default, `instruction` fields on artifacts and `apply` are omitted to reduce token usage. The `--full` flag includes them. This reduces output from ~8700 bytes to ~3000 bytes (65% savings), which matters because skill templates call `schema show --json` at runtime and the output goes into the AI context.
 
 Output includes:
 - `specArtifactFiles`: Resolved list of `{ filename, deltas, validations }` per required spec artifact
 - `changeVerify`: Extraction patterns for `/opsx:verify`
-- `artifacts[]`: All artifact definitions with `deltas`, `validations`, and `instruction`
-- `apply`: Apply phase configuration
+- `artifacts[]`: All artifact definitions with `deltas`, `validations` (and `instruction` only with `--full`)
+- `apply`: Apply phase configuration (and `instruction` only with `--full`)
 - `source` and `path`: Where the schema was resolved from
 
-**Rationale**: Skill templates need access to the parsed schema configuration at runtime. Rather than having the AI read and parse `schema.yaml` files (which could be in the package directory, project directory, or user directory), a single CLI command provides the fully parsed and defaulted configuration.
+**Rationale**: Skill templates need access to the parsed schema configuration at runtime. Rather than having the AI read and parse `schema.yaml` files (which could be in the package directory, project directory, or user directory), a single CLI command provides the fully parsed and defaulted configuration. The `--full` flag exists for debugging or when the AI needs the full instruction text.
 
 **Alternatives considered**:
 - `openspec schema which --json` with schema content: Would require reading the file separately. `schema show` returns the parsed config directly.
 - Have skills read `schema.yaml` by path: Fragile — doesn't work when the schema is a built-in from the package directory
+- Always include instructions: Wastes tokens — instructions are long and rarely needed by skill templates at runtime
 
 ### 13. Skill Templates Use `openspec schema show --json` for Schema Discovery
 

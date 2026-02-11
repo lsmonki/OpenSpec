@@ -9,7 +9,7 @@
   - `requiredSpecArtifacts`: Required artifact files in each spec folder (default: `['specs']`)
   - `deltas[]`: Per-artifact delta merge config (supports multiple sections, e.g., Requirements + Constraints)
   - `validations[]`: Per-artifact structural validation rules with three granularity levels (file-level, scope, eachBlock) — single source of truth for scenarios, normative keywords, etc.
-- **`openspec schema show` command** — Inspect the full parsed configuration of any schema, including resolved `specArtifactFiles`, `changeVerify`, artifact definitions, and apply config. Name is optional (defaults to project schema).
+- **`openspec schema show` command** — Inspect the parsed configuration of any schema, including resolved `specArtifactFiles`, `changeVerify`, artifact definitions, and apply config. Name is optional (defaults to project schema). Omits `instruction` fields by default to save tokens; use `--full` to include them.
 - **Schema-aware skill templates** — Skill prompts no longer hardcode `spec.md`. They use `openspec schema show --json` to discover schema configuration and `specArtifactFiles`, enabling multi-file spec workflows (e.g., `spec.md` + `verify.md` per capability).
 
 ## 1.1.1

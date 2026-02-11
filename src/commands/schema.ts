@@ -404,9 +404,10 @@ export function registerSchemaCommand(program: Command): void {
   // schema show
   schemaCmd
     .command('show [name]')
-    .description('Show the full parsed configuration of a schema (defaults to project schema)')
+    .description('Show the parsed configuration of a schema (defaults to project schema)')
     .option('--json', 'Output as JSON')
-    .action(async (name: string | undefined, options?: { json?: boolean }) => {
+    .option('--full', 'Include instruction fields (omitted by default to save tokens)')
+    .action(async (name: string | undefined, options?: { json?: boolean; full?: boolean }) => {
       try {
         const projectRoot = process.cwd();
         // Resolve schema name: explicit > config > default
@@ -436,9 +437,13 @@ export function registerSchemaCommand(program: Command): void {
             requires: a.requires,
             deltas: a.deltas ?? null,
             validations: a.validations ?? null,
-            instruction: a.instruction ?? null,
+            ...(options?.full ? { instruction: a.instruction ?? null } : {}),
           })),
-          apply: schema.apply ?? null,
+          apply: schema.apply ? {
+            requires: schema.apply.requires,
+            tracks: schema.apply.tracks,
+            ...(options?.full ? { instruction: schema.apply.instruction ?? null } : {}),
+          } : null,
         };
 
         if (options?.json) {
