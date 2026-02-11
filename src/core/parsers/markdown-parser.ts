@@ -15,10 +15,6 @@ export interface SpecFormatConfig {
   requiredSections?: string[];
   /** Name of the section containing requirements (default: 'Requirements') */
   requirementSection?: string;
-  /** Pattern to identify requirement headers (default: '### Requirement: {name}') */
-  requirementPattern?: string;
-  /** Pattern to identify scenario headers (default: '#### Scenario: {name}') */
-  scenarioPattern?: string;
 }
 
 export class MarkdownParser {
@@ -56,7 +52,7 @@ export class MarkdownParser {
       throw new Error(`Spec must have a ${requirementSectionName} section`);
     }
 
-    const requirements = this.parseRequirements(requirementsSection, config);
+    const requirements = this.parseRequirements(requirementsSection);
 
     return {
       name,
@@ -163,7 +159,7 @@ export class MarkdownParser {
     return undefined;
   }
 
-  protected parseRequirements(section: Section, config?: SpecFormatConfig): Requirement[] {
+  protected parseRequirements(section: Section): Requirement[] {
     const requirements: Requirement[] = [];
 
     for (const child of section.children) {
@@ -194,7 +190,7 @@ export class MarkdownParser {
         }
       }
 
-      const scenarios = this.parseScenarios(child, config);
+      const scenarios = this.parseScenarios(child);
 
       requirements.push({
         text,
@@ -205,7 +201,7 @@ export class MarkdownParser {
     return requirements;
   }
 
-  protected parseScenarios(requirementSection: Section, _config?: SpecFormatConfig): Scenario[] {
+  protected parseScenarios(requirementSection: Section): Scenario[] {
     const scenarios: Scenario[] = [];
 
     for (const scenarioSection of requirementSection.children) {

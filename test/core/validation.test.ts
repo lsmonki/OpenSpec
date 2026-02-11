@@ -421,6 +421,7 @@ The system will log all events.
       await fs.writeFile(specPath, deltaSpec);
 
       const validator = new Validator(true);
+      // No config provided — defaults to requiring SHALL|MUST for backward compat
       const report = await validator.validateChangeDeltaSpecs(changeDir);
 
       expect(report.valid).toBe(false);
@@ -524,7 +525,7 @@ Then it works`;
       expect(report.valid).toBe(true);
     });
 
-    it('should skip scenario validation when scenariosRequired is false', async () => {
+    it('should skip scenario validation when no scenario eachBlock rule in validationRules', async () => {
       const specContent = `# Test Spec
 
 ## Purpose
@@ -540,16 +541,21 @@ The system SHALL work without scenarios.
       await fs.writeFile(specPath, specContent);
 
       const validator = new Validator();
+      // No scenario eachBlock rule => scenarios not required
       const config = {
-        scenariosRequired: false,
+        validationRules: [
+          { pattern: '## Purpose', required: true },
+          { pattern: '## Requirements', required: true },
+          { pattern: 'SHALL|MUST', required: true, eachBlock: 'Requirements' },
+        ],
       };
 
       const report = await validator.validateSpec(specPath, config);
-      // Should have no scenario-related warnings
-      const scenarioWarnings = report.issues.filter(
-        i => i.message.includes('scenario') && i.level === 'WARNING'
+      // Should have no scenario-related errors
+      const scenarioErrors = report.issues.filter(
+        i => i.message.includes('Scenario') && i.level === 'ERROR'
       );
-      expect(scenarioWarnings).toHaveLength(0);
+      expect(scenarioErrors).toHaveLength(0);
     });
 
     it('should validate delta specs with custom section name', async () => {
@@ -581,33 +587,7 @@ Then works`;
       expect(report.summary.errors).toBe(0);
     });
 
-    it('should skip scenario requirement in deltas when scenariosRequired is false', async () => {
-      const changeDir = path.join(testDir, 'test-change-no-scenarios');
-      const specsDir = path.join(changeDir, 'specs', 'test-spec');
-      await fs.mkdir(specsDir, { recursive: true });
-
-      const deltaSpec = `# Test Spec
-
-## ADDED Requirements
-
-### Requirement: No Scenario Needed
-The system SHALL work without inline scenarios.
-`;
-
-      const specPath = path.join(specsDir, 'spec.md');
-      await fs.writeFile(specPath, deltaSpec);
-
-      const validator = new Validator();
-      const config = {
-        scenariosRequired: false,
-      };
-
-      const report = await validator.validateChangeDeltaSpecs(changeDir, config);
-      expect(report.valid).toBe(true);
-      expect(report.summary.errors).toBe(0);
-    });
-
-    it('should use custom scenario pattern for counting', async () => {
+    it('should use custom scenario pattern from changeVerify for counting', async () => {
       const changeDir = path.join(testDir, 'test-change-custom-scenario');
       const specsDir = path.join(changeDir, 'specs', 'test-spec');
       await fs.mkdir(specsDir, { recursive: true });
@@ -627,8 +607,9 @@ Then they are recognized`;
       await fs.writeFile(specPath, deltaSpec);
 
       const validator = new Validator();
+      // Custom scenario pattern at ### level via changeVerify
       const config = {
-        scenarioPattern: '### Scenario: {name}',
+        changeScenarioPattern: '### Scenario: {name}',
       };
 
       const report = await validator.validateChangeDeltaSpecs(changeDir, config);
@@ -636,7 +617,49 @@ Then they are recognized`;
       expect(report.summary.errors).toBe(0);
     });
 
-    it('should skip inline scenario validation when scenarioArtifact is not specs', async () => {
+    it('should validate multiple artifact files via specArtifactFiles', async () => {
+      const changeDir = path.join(testDir, 'test-change-multi-artifact');
+      const specsDir = path.join(changeDir, 'specs', 'auth');
+      await fs.mkdir(specsDir, { recursive: true });
+
+      // spec.md has Requirements deltas
+      await fs.writeFile(path.join(specsDir, 'spec.md'), `# Auth Spec
+
+## ADDED Requirements
+
+### Requirement: Login
+The system SHALL authenticate users.
+
+#### Scenario: Login flow
+WHEN user logs in THEN authenticated.
+`);
+
+      // verify.md has Checks deltas
+      await fs.writeFile(path.join(specsDir, 'verify.md'), `# Verify
+
+## ADDED Checks
+
+### Check: Login Verified
+The system SHALL verify login works.
+
+#### Scenario: Verify login
+WHEN verified THEN passes.
+`);
+
+      const validator = new Validator();
+      const config = {
+        specArtifactFiles: [
+          { filename: 'spec.md', deltas: [{ section: 'Requirements', pattern: '### Requirement: {name}' }] },
+          { filename: 'verify.md', deltas: [{ section: 'Checks', pattern: '### Check: {name}' }] },
+        ],
+      };
+
+      const report = await validator.validateChangeDeltaSpecs(changeDir, config);
+      expect(report.valid).toBe(true);
+      expect(report.summary.errors).toBe(0);
+    });
+
+    it('should skip inline scenario validation when no scenario eachBlock rule (external artifact)', async () => {
       const specContent = `# Test Spec
 
 ## Purpose
@@ -652,44 +675,22 @@ The system SHALL support scenarios in external files.
       await fs.writeFile(specPath, specContent);
 
       const validator = new Validator();
+      // No scenario eachBlock rule = scenarios not required inline
       const config = {
-        scenarioArtifact: 'verify', // Scenarios live in a different artifact
-        scenariosRequired: true, // Even though required is true, it's in another artifact
+        validationRules: [
+          { pattern: '## Purpose', required: true },
+          { pattern: '## Requirements', required: true },
+          { pattern: 'SHALL|MUST', required: true, eachBlock: 'Requirements' },
+        ],
       };
 
       const report = await validator.validateSpec(specPath, config);
-      // Should not have scenario-related warnings because scenarios are in a separate artifact
+      // Should not have scenario-related errors
       const scenarioIssues = report.issues.filter(
-        i => i.message.includes('scenario') && i.level === 'WARNING'
+        i => i.message.includes('Scenario') && i.level === 'ERROR'
       );
       expect(scenarioIssues).toHaveLength(0);
     });
 
-    it('should skip inline scenario validation in delta specs when scenarioArtifact is not specs', async () => {
-      const changeDir = path.join(testDir, 'test-change-external-scenarios');
-      const specsDir = path.join(changeDir, 'specs', 'test-spec');
-      await fs.mkdir(specsDir, { recursive: true });
-
-      const deltaSpec = `# Test Spec
-
-## ADDED Requirements
-
-### Requirement: Scenarios Elsewhere
-The system SHALL work with scenarios in external artifact.
-`;
-
-      const specPath = path.join(specsDir, 'spec.md');
-      await fs.writeFile(specPath, deltaSpec);
-
-      const validator = new Validator();
-      const config = {
-        scenarioArtifact: 'tests', // Scenarios live in tests artifact
-        scenariosRequired: true,
-      };
-
-      const report = await validator.validateChangeDeltaSpecs(changeDir, config);
-      expect(report.valid).toBe(true);
-      expect(report.summary.errors).toBe(0);
-    });
   });
 });

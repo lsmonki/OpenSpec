@@ -25,13 +25,33 @@ export async function getActiveChangeIds(root: string = process.cwd()): Promise<
   }
 }
 
-export async function getSpecIds(root: string = process.cwd()): Promise<string[]> {
+export async function getSpecIds(root: string = process.cwd(), requiredFilenames?: string[]): Promise<string[]> {
   const projectConfig = readProjectConfig(root);
   const specsPaths = resolveSpecsPaths(root, projectConfig?.specsPath);
   const specsPath = specsPaths.absolute;
   try {
     // Use hierarchical spec discovery that supports nested structures
     const specs = findAllSpecs(specsPath);
+
+    // If additional required filenames are specified, filter specs that have all of them
+    if (requiredFilenames && requiredFilenames.length > 0) {
+      const result: string[] = [];
+      for (const spec of specs) {
+        const specDir = path.dirname(spec.path);
+        let allExist = true;
+        for (const filename of requiredFilenames) {
+          try {
+            await fs.access(path.join(specDir, filename));
+          } catch {
+            allExist = false;
+            break;
+          }
+        }
+        if (allExist) result.push(spec.capability);
+      }
+      return result.sort();
+    }
+
     return specs.map(spec => spec.capability).sort();
   } catch {
     return [];

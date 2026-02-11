@@ -1,5 +1,5 @@
 import { program } from 'commander';
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { MarkdownParser } from '../core/parsers/markdown-parser.js';
 import { Validator } from '../core/validation/validator.js';
@@ -62,12 +62,26 @@ function filterSpec(spec: Spec, options: ShowOptions): Spec {
 }
 
 /**
- * Print the raw markdown content for a spec file without any formatting.
- * Raw-first behavior ensures text mode is a passthrough for deterministic output.
+ * Print all markdown files in a spec folder.
+ * Shows spec.md first, then other files alphabetically.
  */
-function printSpecTextRaw(specPath: string): void {
-  const content = readFileSync(specPath, 'utf-8');
-  console.log(content);
+function printSpecFolderRaw(specDir: string): void {
+  const entries = readdirSync(specDir, { withFileTypes: true })
+    .filter(e => e.isFile() && e.name.endsWith('.md'))
+    .map(e => e.name)
+    .sort((a, b) => {
+      // spec.md first, then alphabetical
+      if (a === 'spec.md') return -1;
+      if (b === 'spec.md') return 1;
+      return a.localeCompare(b);
+    });
+
+  for (let i = 0; i < entries.length; i++) {
+    if (i > 0) console.log(`\n---\n`);
+    if (entries.length > 1) console.log(`<!-- ${entries[i]} -->`);
+    const content = readFileSync(join(specDir, entries[i]), 'utf-8');
+    console.log(content);
+  }
 }
 
 export class SpecCommand {
@@ -109,7 +123,7 @@ export class SpecCommand {
       console.log(JSON.stringify(output, null, 2));
       return;
     }
-    printSpecTextRaw(specPath);
+    printSpecFolderRaw(join(specsDir, specId));
   }
 }
 

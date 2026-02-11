@@ -38,12 +38,12 @@
 - **`{{specsPath}}` placeholder for custom schemas** — Schema authors can use `{{specsPath}}` in instructions and templates to reference the project's configured specs directory. This ensures custom schemas work correctly regardless of where specs are stored.
 
 - **Configurable spec formats** — Schemas can now define custom requirement patterns, section headers, scenario formats, and normative keyword validation. New schema fields:
-  - `specValidation.pattern`: Custom scenario header pattern (e.g., `### Scenario: {name}`)
-  - `specValidation.required`: Make scenarios optional
-  - `specValidation.artifact`: Put scenarios in separate files (e.g., verify.md)
-  - `specValidation.shallMustPattern`: Custom normative keywords (e.g., `DEBE|DEBERÁ` for Spanish) or `null` to disable
-  - `sections.required/optional`: Configure required and optional section headers
-  - `sections.requirement.pattern`: Custom requirement header pattern (e.g., `### Req: {name}`)
+  - `changeVerify`: Schema-level change verification config (`artifact`, `requirementPattern`, `scenarioPattern`)
+  - `requiredSpecArtifacts`: Required artifact files in each spec folder (default: `['specs']`)
+  - `deltas[]`: Per-artifact delta merge config (supports multiple sections, e.g., Requirements + Constraints)
+  - `validations[]`: Per-artifact structural validation rules with three granularity levels (file-level, scope, eachBlock) — single source of truth for scenarios, normative keywords, etc.
+- **`openspec schema show` command** — Inspect the parsed configuration of any schema, including resolved `specArtifactFiles`, `changeVerify`, artifact definitions, and apply config. Name is optional (defaults to project schema). Omits `instruction` fields by default to save tokens; use `--full` to include them.
+- **Schema-aware skill templates** — Skill prompts no longer hardcode `spec.md`. They use `openspec schema show --json` to discover schema configuration and `specArtifactFiles`, enabling multi-file spec workflows (e.g., `spec.md` + `verify.md` per capability).
 
 ### Improvements
 

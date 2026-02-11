@@ -10,8 +10,10 @@ import {
   getPackageSchemasDir,
   listSchemas,
 } from '../core/artifact-graph/resolver.js';
-import { parseSchema, SchemaValidationError } from '../core/artifact-graph/schema.js';
+import { parseSchema, SchemaValidationError, resolveSpecArtifactFiles } from '../core/artifact-graph/schema.js';
 import type { SchemaYaml, Artifact } from '../core/artifact-graph/types.js';
+import { resolveSchema } from '../core/artifact-graph/resolver.js';
+import { readProjectConfig } from '../core/project-config.js';
 
 /**
  * Schema source location type
@@ -395,6 +397,87 @@ export function registerSchemaCommand(program: Command): void {
         }
       } catch (error) {
         console.error(`Error: ${(error as Error).message}`);
+        process.exitCode = 1;
+      }
+    });
+
+  // schema show
+  schemaCmd
+    .command('show [name]')
+    .description('Show the parsed configuration of a schema (defaults to project schema)')
+    .option('--json', 'Output as JSON')
+    .option('--full', 'Include instruction fields (omitted by default to save tokens)')
+    .action(async (name: string | undefined, options?: { json?: boolean; full?: boolean }) => {
+      try {
+        const projectRoot = process.cwd();
+        // Resolve schema name: explicit > config > default
+        let resolvedName = name;
+        if (!resolvedName) {
+          const config = readProjectConfig(projectRoot);
+          resolvedName = config?.schema ?? 'spec-driven';
+        }
+        const schema = resolveSchema(resolvedName, projectRoot);
+        const resolution = getSchemaResolution(resolvedName, projectRoot);
+        const specArtifactFiles = resolveSpecArtifactFiles(schema);
+
+        const output = {
+          name: schema.name,
+          version: schema.version,
+          description: schema.description,
+          source: resolution?.source ?? 'unknown',
+          path: resolution?.path ?? null,
+          requiredSpecArtifacts: schema.requiredSpecArtifacts ?? ['specs'],
+          specArtifactFiles,
+          changeVerify: schema.changeVerify ?? { artifact: 'specs', requirementPattern: '### Requirement: {name}', scenarioPattern: '#### Scenario: {name}' },
+          artifacts: schema.artifacts.map(a => ({
+            id: a.id,
+            generates: a.generates,
+            description: a.description,
+            template: a.template,
+            requires: a.requires,
+            deltas: a.deltas ?? null,
+            validations: a.validations ?? null,
+            ...(options?.full ? { instruction: a.instruction ?? null } : {}),
+          })),
+          apply: schema.apply ? {
+            requires: schema.apply.requires,
+            tracks: schema.apply.tracks,
+            ...(options?.full ? { instruction: schema.apply.instruction ?? null } : {}),
+          } : null,
+        };
+
+        if (options?.json) {
+          console.log(JSON.stringify(output, null, 2));
+        } else {
+          console.log(`Schema: ${output.name} (v${output.version})`);
+          console.log(`Source: ${output.source}`);
+          console.log(`Description: ${output.description}`);
+          console.log();
+          console.log(`Required spec artifacts: ${(output.requiredSpecArtifacts).join(', ')}`);
+          console.log(`Spec files per capability:`);
+          for (const f of specArtifactFiles) {
+            const deltasInfo = f.deltas ? ` (deltas: ${f.deltas.map(d => d.section).join(', ')})` : '';
+            console.log(`  - ${f.filename}${deltasInfo}`);
+          }
+          console.log();
+          console.log(`Artifacts (${output.artifacts.length}):`);
+          for (const a of output.artifacts) {
+            const deps = a.requires.length > 0 ? ` [requires: ${a.requires.join(', ')}]` : '';
+            console.log(`  - ${a.id}: ${a.generates}${deps}`);
+          }
+          if (output.apply) {
+            console.log();
+            console.log(`Apply phase: requires ${output.apply.requires.join(', ')}, tracks ${output.apply.tracks ?? 'nothing'}`);
+          }
+        }
+      } catch (error) {
+        if (options?.json) {
+          console.log(JSON.stringify({
+            error: (error as Error).message,
+          }, null, 2));
+        } else {
+          console.error(`Error: ${(error as Error).message}`);
+        }
         process.exitCode = 1;
       }
     });

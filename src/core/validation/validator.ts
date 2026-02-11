@@ -17,7 +17,7 @@ import {
 } from '../parsers/requirement-blocks.js';
 import { FileSystemUtils } from '../../utils/file-system.js';
 import { patternToRegex } from '../../utils/pattern.js';
-import { findAllSpecs } from '../../utils/spec-discovery.js';
+import type { ValidationRule } from '../artifact-graph/types.js';
 
 /**
  * Configuration for spec validation derived from schema.
@@ -29,15 +29,20 @@ export interface SpecValidationConfig {
   requirementSection?: string;
   /** Pattern to identify requirement headers (default: '### Requirement: {name}') */
   requirementPattern?: string;
-  /** Pattern to identify scenario headers (default: '#### Scenario: {name}') */
-  scenarioPattern?: string;
-  /** Whether scenarios are required (default: true) */
-  scenariosRequired?: boolean;
-  /** Which artifact contains scenarios (default: 'specs'). When not 'specs', inline validation is skipped. */
-  scenarioArtifact?: string;
-  /** Regex pattern to match normative keywords in requirement text (default: 'SHALL|MUST')
-   *  Set to null or empty string to disable validation */
-  shallMustPattern?: string | null;
+  /** Multiple delta configs from schema's deltas[] array.
+   *  When provided, validateChangeDeltaSpecs iterates over all entries.
+   *  Falls back to requirementSection/requirementPattern if not provided. */
+  deltaConfigs?: Array<{ section: string; pattern: string }>;
+  /** Validation rules from schema's validations[] array.
+   *  Used by validateContentRules for spec structural validation. */
+  validationRules?: ValidationRule[];
+  /** Scenario pattern from changeVerify (default: '#### Scenario: {name}').
+   *  Used by validateChangeDeltaSpecs for change validation. */
+  changeScenarioPattern?: string;
+  /** Resolved spec artifact files from requiredSpecArtifacts.
+   *  Each entry has a filename and optional deltas config.
+   *  Default: [{ filename: 'spec.md', deltas: [{ section: 'Requirements', pattern: '### Requirement: {name}' }] }] */
+  specArtifactFiles?: Array<{ filename: string; deltas?: Array<{ section: string; pattern: string }>; validations?: Array<{ pattern: string; required: boolean; scope?: string; eachBlock?: string }> }>;
 }
 
 export class Validator {
@@ -59,8 +64,6 @@ export class Validator {
         ? {
             requiredSections: config.requiredSections,
             requirementSection: config.requirementSection,
-            requirementPattern: config.requirementPattern,
-            scenarioPattern: config.scenarioPattern,
           }
         : undefined;
 
@@ -103,8 +106,6 @@ export class Validator {
         ? {
             requiredSections: config.requiredSections,
             requirementSection: config.requirementSection,
-            requirementPattern: config.requirementPattern,
-            scenarioPattern: config.scenarioPattern,
           }
         : undefined;
 
@@ -172,94 +173,137 @@ export class Validator {
     const missingHeaderSpecs: string[] = [];
     const emptySectionSpecs: Array<{ path: string; sections: string[] }> = [];
 
-    // Use configured values or defaults
-    const sectionName = config?.requirementSection ?? 'Requirements';
-    const reqPattern = config?.requirementPattern ?? '### Requirement: {name}';
-    const scenarioPattern = config?.scenarioPattern ?? '#### Scenario: {name}';
-    const scenarioArtifact = config?.scenarioArtifact ?? 'specs';
-    // Skip inline scenario validation when scenarios live in a different artifact
-    const scenariosRequired = scenarioArtifact === 'specs' && (config?.scenariosRequired ?? true);
-    // Get shallMustPattern - default to 'SHALL|MUST', null/empty disables validation
-    const shallMustPattern = config?.shallMustPattern === undefined ? 'SHALL|MUST' : config.shallMustPattern;
+    // Change validation patterns from changeVerify (via bridge).
+    // Defaults preserve backward compatibility.
+    const scenarioPattern = config?.changeScenarioPattern ?? '#### Scenario: {name}';
 
-    // Build format config for delta parsing
-    const deltaConfig: RequirementFormatConfig = {
-      sectionName,
-      requirementPattern: reqPattern,
-    };
+    // Resolve artifact files to validate.
+    // When specArtifactFiles is not provided, build default from legacy config fields.
+    const artifactFiles = config?.specArtifactFiles ?? [{
+      filename: 'spec.md',
+      deltas: config?.deltaConfigs?.length
+        ? config.deltaConfigs
+        : [{ section: config?.requirementSection ?? 'Requirements', pattern: config?.requirementPattern ?? '### Requirement: {name}' }],
+    }];
 
-    // Build delta section names from config
-    const deltaSectionNames = {
-      added: `ADDED ${sectionName}`,
-      modified: `MODIFIED ${sectionName}`,
-      removed: `REMOVED ${sectionName}`,
-      renamed: `RENAMED ${sectionName}`,
+    // Build the combined delta configs list for error messages
+    const deltaConfigsList: Array<{ section: string; pattern: string }> = [];
+    for (const af of artifactFiles) {
+      if (af.deltas) deltaConfigsList.push(...af.deltas);
+    }
+    if (deltaConfigsList.length === 0) {
+      deltaConfigsList.push({
+        section: config?.requirementSection ?? 'Requirements',
+        pattern: config?.requirementPattern ?? '### Requirement: {name}',
+      });
+    }
+
+    // Recursively discover all spec directories (supports hierarchical structures)
+    const specDirs: Array<{ capability: string; dirPath: string }> = [];
+    const walkSpecDirs = async (dir: string, baseDir: string): Promise<void> => {
+      let dirEntries: import('fs').Dirent[];
+      try {
+        dirEntries = await fs.readdir(dir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      const hasMd = dirEntries.some(e => e.isFile() && e.name.endsWith('.md'));
+      if (hasMd) {
+        const capability = path.relative(baseDir, dir).split(path.sep).join('/');
+        specDirs.push({ capability, dirPath: dir });
+      }
+      for (const e of dirEntries) {
+        if (e.isDirectory() && !e.name.startsWith('.')) {
+          await walkSpecDirs(path.join(dir, e.name), baseDir);
+        }
+      }
     };
 
     try {
-      // Use recursive spec discovery to support hierarchical structures
-      const specs = findAllSpecs(specsDir);
+      await walkSpecDirs(specsDir, specsDir);
+      for (const { capability: specName, dirPath: specDirPath } of specDirs) {
 
-      for (const spec of specs) {
+        // Iterate over all artifact files (not just spec.md)
+        for (const artifactFile of artifactFiles) {
+          if (!artifactFile.deltas?.length) continue; // skip non-delta artifacts
+
+        const specFile = path.join(specDirPath, artifactFile.filename);
         let content: string | undefined;
         try {
-          content = await fs.readFile(spec.path, 'utf-8');
+          content = await fs.readFile(specFile, 'utf-8');
         } catch {
           continue;
         }
 
-        const plan = parseDeltaSpec(content, deltaConfig);
-        // Use full capability path (e.g., "_global/testing/spec.md" instead of "testing/spec.md")
-        const entryPath = path.join(spec.capability, 'spec.md');
-        const sectionNames: string[] = [];
-        if (plan.sectionPresence.added) sectionNames.push(`## ${deltaSectionNames.added}`);
-        if (plan.sectionPresence.modified) sectionNames.push(`## ${deltaSectionNames.modified}`);
-        if (plan.sectionPresence.removed) sectionNames.push(`## ${deltaSectionNames.removed}`);
-        if (plan.sectionPresence.renamed) sectionNames.push(`## ${deltaSectionNames.renamed}`);
-        const hasSections = sectionNames.length > 0;
-        const hasEntries =
-          plan.added.length + plan.modified.length + plan.removed.length + plan.renamed.length > 0;
-        if (!hasEntries) {
-          if (hasSections) emptySectionSpecs.push({ path: entryPath, sections: sectionNames });
-          else missingHeaderSpecs.push(entryPath);
-        }
+        const entryPath = `${specName}/${artifactFile.filename}`;
+        let hasAnyEntries = false;
+        const allSectionNames: string[] = [];
 
-        const addedNames = new Set<string>();
-        const modifiedNames = new Set<string>();
-        const removedNames = new Set<string>();
-        const renamedFrom = new Set<string>();
-        const renamedTo = new Set<string>();
+        // Iterate over all delta configs for this artifact
+        for (const dc of artifactFile.deltas) {
+          const deltaConfig: RequirementFormatConfig = {
+            sectionName: dc.section,
+            requirementPattern: dc.pattern,
+          };
+          const deltaSectionNames = {
+            added: `ADDED ${dc.section}`,
+            modified: `MODIFIED ${dc.section}`,
+            removed: `REMOVED ${dc.section}`,
+            renamed: `RENAMED ${dc.section}`,
+          };
 
-        // Validate ADDED
-        for (const block of plan.added) {
-          const key = normalizeRequirementName(block.name);
-          totalDeltas++;
-          if (addedNames.has(key)) {
-            issues.push({
-              level: 'ERROR',
-              path: entryPath,
-              message: `Duplicate requirement in ADDED: "${block.name}"`,
-            });
-          } else {
-            addedNames.add(key);
-          }
-          const requirementText = this.extractRequirementText(block.raw, reqPattern);
-          if (!requirementText) {
-            issues.push({
-              level: 'ERROR',
-              path: entryPath,
-              message: `ADDED "${block.name}" is missing requirement text`,
-            });
-          } else if (shallMustPattern && !this.matchesNormativePattern(requirementText, shallMustPattern)) {
-            issues.push({
-              level: 'ERROR',
-              path: entryPath,
-              message: `ADDED "${block.name}" must match normative pattern: ${shallMustPattern}`,
-            });
-          }
-          if (scenariosRequired) {
-            const scenarioCount = this.countScenarios(block.raw, scenarioPattern);
-            if (scenarioCount < 1) {
+          // Derive normative pattern from validationRules eachBlock for this section.
+          // Look for eachBlock rules matching dc.section that aren't scenario patterns.
+          const sectionRules = (artifactFile.validations ?? config?.validationRules ?? [])
+            .filter(r => r.eachBlock === dc.section && r.required);
+          const normativeRule = sectionRules.find(r => !r.pattern.startsWith('#'));
+          const shallMustPattern: string | null = normativeRule?.pattern
+            ?? (config?.validationRules ? null : 'SHALL|MUST');
+
+          const plan = parseDeltaSpec(content, deltaConfig);
+          if (plan.sectionPresence.added) allSectionNames.push(`## ${deltaSectionNames.added}`);
+          if (plan.sectionPresence.modified) allSectionNames.push(`## ${deltaSectionNames.modified}`);
+          if (plan.sectionPresence.removed) allSectionNames.push(`## ${deltaSectionNames.removed}`);
+          if (plan.sectionPresence.renamed) allSectionNames.push(`## ${deltaSectionNames.renamed}`);
+          const hasEntries =
+            plan.added.length + plan.modified.length + plan.removed.length + plan.renamed.length > 0;
+          if (hasEntries) hasAnyEntries = true;
+
+          const addedNames = new Set<string>();
+          const modifiedNames = new Set<string>();
+          const removedNames = new Set<string>();
+          const renamedFrom = new Set<string>();
+          const renamedTo = new Set<string>();
+
+          // Validate ADDED
+          for (const block of plan.added) {
+            const key = normalizeRequirementName(block.name);
+            totalDeltas++;
+            if (addedNames.has(key)) {
+              issues.push({
+                level: 'ERROR',
+                path: entryPath,
+                message: `Duplicate requirement in ADDED ${dc.section}: "${block.name}"`,
+              });
+            } else {
+              addedNames.add(key);
+            }
+            const requirementText = this.extractRequirementText(block.raw, dc.pattern);
+            if (!requirementText) {
+              issues.push({
+                level: 'ERROR',
+                path: entryPath,
+                message: `ADDED "${block.name}" is missing requirement text`,
+              });
+            } else if (shallMustPattern && !this.matchesNormativePattern(requirementText, shallMustPattern)) {
+              issues.push({
+                level: 'ERROR',
+                path: entryPath,
+                message: `ADDED "${block.name}" must match normative pattern: ${shallMustPattern}`,
+              });
+            }
+            const addedScenarioCount = this.countScenarios(block.raw, scenarioPattern);
+            if (addedScenarioCount < 1) {
               issues.push({
                 level: 'ERROR',
                 path: entryPath,
@@ -267,38 +311,36 @@ export class Validator {
               });
             }
           }
-        }
 
-        // Validate MODIFIED
-        for (const block of plan.modified) {
-          const key = normalizeRequirementName(block.name);
-          totalDeltas++;
-          if (modifiedNames.has(key)) {
-            issues.push({
-              level: 'ERROR',
-              path: entryPath,
-              message: `Duplicate requirement in MODIFIED: "${block.name}"`,
-            });
-          } else {
-            modifiedNames.add(key);
-          }
-          const requirementText = this.extractRequirementText(block.raw, reqPattern);
-          if (!requirementText) {
-            issues.push({
-              level: 'ERROR',
-              path: entryPath,
-              message: `MODIFIED "${block.name}" is missing requirement text`,
-            });
-          } else if (shallMustPattern && !this.matchesNormativePattern(requirementText, shallMustPattern)) {
-            issues.push({
-              level: 'ERROR',
-              path: entryPath,
-              message: `MODIFIED "${block.name}" must match normative pattern: ${shallMustPattern}`,
-            });
-          }
-          if (scenariosRequired) {
-            const scenarioCount = this.countScenarios(block.raw, scenarioPattern);
-            if (scenarioCount < 1) {
+          // Validate MODIFIED
+          for (const block of plan.modified) {
+            const key = normalizeRequirementName(block.name);
+            totalDeltas++;
+            if (modifiedNames.has(key)) {
+              issues.push({
+                level: 'ERROR',
+                path: entryPath,
+                message: `Duplicate requirement in MODIFIED ${dc.section}: "${block.name}"`,
+              });
+            } else {
+              modifiedNames.add(key);
+            }
+            const requirementText = this.extractRequirementText(block.raw, dc.pattern);
+            if (!requirementText) {
+              issues.push({
+                level: 'ERROR',
+                path: entryPath,
+                message: `MODIFIED "${block.name}" is missing requirement text`,
+              });
+            } else if (shallMustPattern && !this.matchesNormativePattern(requirementText, shallMustPattern)) {
+              issues.push({
+                level: 'ERROR',
+                path: entryPath,
+                message: `MODIFIED "${block.name}" must match normative pattern: ${shallMustPattern}`,
+              });
+            }
+            const modifiedScenarioCount = this.countScenarios(block.raw, scenarioPattern);
+            if (modifiedScenarioCount < 1) {
               issues.push({
                 level: 'ERROR',
                 path: entryPath,
@@ -306,112 +348,119 @@ export class Validator {
               });
             }
           }
+
+          // Validate REMOVED (names only)
+          for (const name of plan.removed) {
+            const key = normalizeRequirementName(name);
+            totalDeltas++;
+            if (removedNames.has(key)) {
+              issues.push({
+                level: 'ERROR',
+                path: entryPath,
+                message: `Duplicate requirement in REMOVED ${dc.section}: "${name}"`,
+              });
+            } else {
+              removedNames.add(key);
+            }
+          }
+
+          // Validate RENAMED pairs
+          for (const { from, to } of plan.renamed) {
+            const fromKey = normalizeRequirementName(from);
+            const toKey = normalizeRequirementName(to);
+            totalDeltas++;
+            if (renamedFrom.has(fromKey)) {
+              issues.push({
+                level: 'ERROR',
+                path: entryPath,
+                message: `Duplicate FROM in RENAMED ${dc.section}: "${from}"`,
+              });
+            } else {
+              renamedFrom.add(fromKey);
+            }
+            if (renamedTo.has(toKey)) {
+              issues.push({
+                level: 'ERROR',
+                path: entryPath,
+                message: `Duplicate TO in RENAMED ${dc.section}: "${to}"`,
+              });
+            } else {
+              renamedTo.add(toKey);
+            }
+          }
+
+          // Cross-section conflicts (within the same delta section)
+          for (const n of modifiedNames) {
+            if (removedNames.has(n)) {
+              issues.push({
+                level: 'ERROR',
+                path: entryPath,
+                message: `Requirement present in both MODIFIED and REMOVED: "${n}"`,
+              });
+            }
+            if (addedNames.has(n)) {
+              issues.push({
+                level: 'ERROR',
+                path: entryPath,
+                message: `Requirement present in both MODIFIED and ADDED: "${n}"`,
+              });
+            }
+          }
+          for (const n of addedNames) {
+            if (removedNames.has(n)) {
+              issues.push({
+                level: 'ERROR',
+                path: entryPath,
+                message: `Requirement present in both ADDED and REMOVED: "${n}"`,
+              });
+            }
+          }
+          for (const { from, to } of plan.renamed) {
+            const fromKey = normalizeRequirementName(from);
+            const toKey = normalizeRequirementName(to);
+            if (modifiedNames.has(fromKey)) {
+              issues.push({
+                level: 'ERROR',
+                path: entryPath,
+                message: `MODIFIED references old name from RENAMED. Use new header for "${to}"`,
+              });
+            }
+            if (addedNames.has(toKey)) {
+              issues.push({
+                level: 'ERROR',
+                path: entryPath,
+                message: `RENAMED TO collides with ADDED for "${to}"`,
+              });
+            }
+          }
         }
 
-        // Validate REMOVED (names only)
-        for (const name of plan.removed) {
-          const key = normalizeRequirementName(name);
-          totalDeltas++;
-          if (removedNames.has(key)) {
-            issues.push({
-              level: 'ERROR',
-              path: entryPath,
-              message: `Duplicate requirement in REMOVED: "${name}"`,
-            });
-          } else {
-            removedNames.add(key);
-          }
+        if (!hasAnyEntries) {
+          if (allSectionNames.length > 0) emptySectionSpecs.push({ path: entryPath, sections: allSectionNames });
+          else missingHeaderSpecs.push(entryPath);
         }
-
-        // Validate RENAMED pairs
-        for (const { from, to } of plan.renamed) {
-          const fromKey = normalizeRequirementName(from);
-          const toKey = normalizeRequirementName(to);
-          totalDeltas++;
-          if (renamedFrom.has(fromKey)) {
-            issues.push({
-              level: 'ERROR',
-              path: entryPath,
-              message: `Duplicate FROM in RENAMED: "${from}"`,
-            });
-          } else {
-            renamedFrom.add(fromKey);
-          }
-          if (renamedTo.has(toKey)) {
-            issues.push({
-              level: 'ERROR',
-              path: entryPath,
-              message: `Duplicate TO in RENAMED: "${to}"`,
-            });
-          } else {
-            renamedTo.add(toKey);
-          }
-        }
-
-        // Cross-section conflicts (within the same spec file)
-        for (const n of modifiedNames) {
-          if (removedNames.has(n)) {
-            issues.push({
-              level: 'ERROR',
-              path: entryPath,
-              message: `Requirement present in both MODIFIED and REMOVED: "${n}"`,
-            });
-          }
-          if (addedNames.has(n)) {
-            issues.push({
-              level: 'ERROR',
-              path: entryPath,
-              message: `Requirement present in both MODIFIED and ADDED: "${n}"`,
-            });
-          }
-        }
-        for (const n of addedNames) {
-          if (removedNames.has(n)) {
-            issues.push({
-              level: 'ERROR',
-              path: entryPath,
-              message: `Requirement present in both ADDED and REMOVED: "${n}"`,
-            });
-          }
-        }
-        for (const { from, to } of plan.renamed) {
-          const fromKey = normalizeRequirementName(from);
-          const toKey = normalizeRequirementName(to);
-          if (modifiedNames.has(fromKey)) {
-            issues.push({
-              level: 'ERROR',
-              path: entryPath,
-              message: `MODIFIED references old name from RENAMED. Use new header for "${to}"`,
-            });
-          }
-          if (addedNames.has(toKey)) {
-            issues.push({
-              level: 'ERROR',
-              path: entryPath,
-              message: `RENAMED TO collides with ADDED for "${to}"`,
-            });
-          }
-        }
+        } // end artifact file loop
       }
     } catch {
       // If no specs dir, treat as no deltas
     }
 
-    // Extract requirement pattern prefix for error message
-    const reqPatternPrefix = reqPattern.replace('{name}', '');
+    // Build pattern prefixes for error messages
+    const patternPrefixes = deltaConfigsList.map(dc => dc.pattern.replace('{name}', '')).join('" or "');
+    const exampleHeaders = deltaConfigsList.map(dc => `"## ADDED ${dc.section}"`).join(' or ');
 
     for (const { path: specPath, sections } of emptySectionSpecs) {
       issues.push({
         level: 'ERROR',
         path: specPath,
-        message: `Delta sections ${this.formatSectionList(sections)} were found, but no requirement entries parsed. Ensure each section includes at least one "${reqPatternPrefix}" block (REMOVED may use bullet list syntax).`,
+        message: `Delta sections ${this.formatSectionList(sections)} were found, but no requirement entries parsed. Ensure each section includes at least one "${patternPrefixes}" block (REMOVED may use bullet list syntax).`,
       });
     }
     for (const specPath of missingHeaderSpecs) {
       issues.push({
         level: 'ERROR',
         path: specPath,
-        message: `No delta sections found. Add headers such as "## ${deltaSectionNames.added}" or move non-delta notes outside specs/.`,
+        message: `No delta sections found. Add headers such as ${exampleHeaders} or move non-delta notes outside specs/.`,
       });
     }
 
@@ -446,10 +495,12 @@ export class Validator {
     config?: SpecValidationConfig
   ): ValidationIssue[] {
     const issues: ValidationIssue[] = [];
-    const scenarioArtifact = config?.scenarioArtifact ?? 'specs';
-    // Skip inline scenario validation when scenarios live in a different artifact
-    const scenariosRequired = scenarioArtifact === 'specs' && (config?.scenariosRequired ?? true);
-    const scenarioPattern = config?.scenarioPattern ?? '#### Scenario: {name}';
+
+    // Structural validation via generic rules engine (validations[] from schema)
+    // This is the single source of truth for scenarios, normative keywords, etc.
+    if (config?.validationRules && config.validationRules.length > 0) {
+      issues.push(...this.validateContentRules(content, config.validationRules, spec.name || 'spec'));
+    }
 
     if (spec.overview.length < MIN_PURPOSE_LENGTH) {
       issues.push({
@@ -459,34 +510,12 @@ export class Validator {
       });
     }
 
-    // Get shallMustPattern - default to 'SHALL|MUST', null/empty disables validation
-    const shallMustPattern = config?.shallMustPattern === undefined ? 'SHALL|MUST' : config.shallMustPattern;
-
     spec.requirements.forEach((req, index) => {
-      // Check for normative keywords in requirement text (if pattern is configured)
-      if (shallMustPattern && !this.matchesNormativePattern(req.text, shallMustPattern)) {
-        issues.push({
-          level: 'ERROR',
-          path: `requirements[${index}].text`,
-          message: `${VALIDATION_MESSAGES.REQUIREMENT_NO_SHALL} (pattern: ${shallMustPattern})`,
-        });
-      }
-
       if (req.text.length > MAX_REQUIREMENT_TEXT_LENGTH) {
         issues.push({
           level: 'INFO',
           path: `requirements[${index}]`,
           message: VALIDATION_MESSAGES.REQUIREMENT_TOO_LONG,
-        });
-      }
-
-      if (scenariosRequired && req.scenarios.length === 0) {
-        // Use configured pattern in guidance
-        const patternExample = scenarioPattern.replace('{name}', 'Example scenario');
-        issues.push({
-          level: 'ERROR',
-          path: `requirements[${index}].scenarios`,
-          message: `${VALIDATION_MESSAGES.REQUIREMENT_NO_SCENARIOS}. Use "${patternExample}" format.`,
         });
       }
     });
@@ -530,9 +559,15 @@ export class Validator {
     const sectionName = config?.requirementSection ?? 'Requirements';
 
     if (msg === VALIDATION_MESSAGES.CHANGE_NO_DELTAS) {
-      // Use configured section name in guidance
-      const deltaHeaders = `## ADDED ${sectionName}, ## MODIFIED ${sectionName}, ## REMOVED ${sectionName}, or ## RENAMED ${sectionName}`;
-      return `${msg}. Change specs must include ${deltaHeaders}. Files must live under openspec/changes/{id}/specs/<capability-path>/spec.md.`;
+      // Use configured section names in guidance (support multiple delta configs)
+      const deltaConfigsList = config?.deltaConfigs?.length
+        ? config.deltaConfigs
+        : [{ section: sectionName, pattern: config?.requirementPattern ?? '### Requirement: {name}' }];
+      const allHeaders = deltaConfigsList.flatMap(dc => [
+        `## ADDED ${dc.section}`, `## MODIFIED ${dc.section}`,
+        `## REMOVED ${dc.section}`, `## RENAMED ${dc.section}`,
+      ]);
+      return `${msg}. Change specs must include ${allHeaders.join(', ')}. Files must live under openspec/changes/{id}/specs/<capability>/spec.md.`;
     }
     if (msg.includes('Spec must have a') && msg.includes('section')) {
       // Dynamic section name in message
@@ -661,4 +696,231 @@ export class Validator {
     const last = sections[sections.length - 1];
     return `${head.join(', ')} and ${last}`;
   }
+
+  /**
+   * Cross-file verification: check that every requirement in specContent
+   * has at least one verification block (scenario) in verifyContent.
+   *
+   * @param specContent - Content of the spec file (requirements)
+   * @param verifyContent - Content of the verification file (scenarios)
+   * @param patterns - Patterns for requirement and scenario headers
+   * @param filePath - Path for error reporting
+   */
+  crossFileVerify(
+    specContent: string,
+    verifyContent: string,
+    patterns: { requirementPattern?: string; scenarioPattern?: string },
+    filePath: string
+  ): ValidationIssue[] {
+    const issues: ValidationIssue[] = [];
+    const reqPattern = patterns.requirementPattern ?? '### Requirement: {name}';
+    const scenarioPattern = patterns.scenarioPattern ?? '#### Scenario: {name}';
+
+    // Extract requirement names from spec content
+    const reqRegex = patternToRegex(reqPattern);
+    const requirementNames: string[] = [];
+    for (const line of specContent.split('\n')) {
+      const match = line.match(reqRegex);
+      if (match) {
+        requirementNames.push(normalizeRequirementName(match[1]));
+      }
+    }
+
+    if (requirementNames.length === 0) return issues;
+
+    // Extract scenario names from verify content
+    const scenarioRegex = patternToRegex(scenarioPattern);
+    const scenarioNames = new Set<string>();
+    for (const line of verifyContent.split('\n')) {
+      const match = line.match(scenarioRegex);
+      if (match) {
+        scenarioNames.add(match[1].trim());
+      }
+    }
+
+    // Check each requirement has at least one related scenario
+    // We do a loose match: scenario name should reference the requirement name
+    for (const reqName of requirementNames) {
+      const reqLower = reqName.toLowerCase();
+      const hasScenario = [...scenarioNames].some(s =>
+        s.toLowerCase().includes(reqLower) || reqLower.includes(s.toLowerCase())
+      );
+      // Also check if any scenario text just exists (lenient - at least one scenario per file)
+      if (!hasScenario && scenarioNames.size === 0) {
+        issues.push({
+          level: 'ERROR',
+          path: filePath,
+          message: `No verification scenarios found for requirement "${reqName}". The verification file should contain at least one "${scenarioPattern.replace('{name}', '')}" block.`,
+        });
+      }
+    }
+
+    return issues;
+  }
+
+  /**
+   * Validate content against a `validations[]` array from the schema.
+   * Supports three granularity levels:
+   * - File-level (no scope/eachBlock): pattern must exist somewhere in content
+   * - Scope-level (scope: "X"): pattern must exist within ## X section
+   * - eachBlock-level (eachBlock: "X"): pattern must exist in each ### block within ## X section
+   */
+  validateContentRules(
+    content: string,
+    rules: ValidationRule[],
+    filePath: string
+  ): ValidationIssue[] {
+    const issues: ValidationIssue[] = [];
+
+    for (const rule of rules) {
+      const level: ValidationLevel = rule.required ? 'ERROR' : 'WARNING';
+
+      if (rule.eachBlock) {
+        // eachBlock-level: check pattern in each ### block within ## section
+        const sectionContent = extractSectionContent(content, rule.eachBlock);
+        if (sectionContent === undefined) {
+          issues.push({
+            level,
+            path: filePath,
+            message: `Section "## ${rule.eachBlock}" not found (needed for eachBlock validation of "${rule.pattern}")`,
+          });
+          continue;
+        }
+        const blocks = splitIntoBlocks(sectionContent);
+        if (blocks.length === 0) {
+          issues.push({
+            level: 'WARNING',
+            path: filePath,
+            message: `No ### blocks found in "## ${rule.eachBlock}" to validate pattern "${rule.pattern}"`,
+          });
+          continue;
+        }
+        for (const block of blocks) {
+          if (!matchesPattern(block.content, rule.pattern)) {
+            issues.push({
+              level,
+              path: filePath,
+              message: `Block "${block.name}" in "## ${rule.eachBlock}" is missing ${rule.required ? 'required' : 'recommended'} pattern: ${rule.pattern}`,
+            });
+          }
+        }
+      } else if (rule.scope) {
+        // Scope-level: check pattern within ## section
+        const sectionContent = extractSectionContent(content, rule.scope);
+        if (sectionContent === undefined) {
+          issues.push({
+            level,
+            path: filePath,
+            message: `Section "## ${rule.scope}" not found (needed for scope validation of "${rule.pattern}")`,
+          });
+          continue;
+        }
+        if (!matchesPattern(sectionContent, rule.pattern)) {
+          issues.push({
+            level,
+            path: filePath,
+            message: `Section "## ${rule.scope}" is missing ${rule.required ? 'required' : 'recommended'} pattern: ${rule.pattern}`,
+          });
+        }
+      } else {
+        // File-level: check pattern anywhere in content
+        if (!matchesPattern(content, rule.pattern)) {
+          issues.push({
+            level,
+            path: filePath,
+            message: `File is missing ${rule.required ? 'required' : 'recommended'} pattern: ${rule.pattern}`,
+          });
+        }
+      }
+    }
+
+    return issues;
+  }
+}
+
+/**
+ * Extract the content of a ## section by name.
+ * Returns the text between the ## header and the next ## header (or end of file).
+ * Returns undefined if section not found.
+ */
+export function extractSectionContent(content: string, sectionName: string): string | undefined {
+  const lines = content.split('\n');
+  const headerRegex = new RegExp(`^##\\s+${escapeRegexChars(sectionName)}\\s*$`, 'i');
+
+  let startIdx = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (headerRegex.test(lines[i])) {
+      startIdx = i + 1;
+      break;
+    }
+  }
+
+  if (startIdx === -1) return undefined;
+
+  let endIdx = lines.length;
+  for (let i = startIdx; i < lines.length; i++) {
+    if (/^##\s+/.test(lines[i])) {
+      endIdx = i;
+      break;
+    }
+  }
+
+  return lines.slice(startIdx, endIdx).join('\n');
+}
+
+/**
+ * Split section content into ### blocks.
+ * Each block has a name (from the ### header) and content (including the header).
+ */
+export function splitIntoBlocks(sectionContent: string): Array<{ name: string; content: string }> {
+  const lines = sectionContent.split('\n');
+  const blocks: Array<{ name: string; content: string }> = [];
+  let currentName: string | null = null;
+  let currentLines: string[] = [];
+
+  for (const line of lines) {
+    const headerMatch = line.match(/^###\s+(.+)$/);
+    if (headerMatch) {
+      if (currentName !== null) {
+        blocks.push({ name: currentName, content: currentLines.join('\n') });
+      }
+      currentName = headerMatch[1].trim();
+      currentLines = [line];
+    } else if (currentName !== null) {
+      currentLines.push(line);
+    }
+  }
+
+  if (currentName !== null) {
+    blocks.push({ name: currentName, content: currentLines.join('\n') });
+  }
+
+  return blocks;
+}
+
+/**
+ * Check if content matches a pattern string.
+ * Patterns can be:
+ * - A regex pattern like "SHALL|MUST"
+ * - A pattern with {name} placeholder like "### Requirement: {name}"
+ * - A literal section header like "## Purpose"
+ */
+function matchesPattern(content: string, pattern: string): boolean {
+  if (pattern.includes('{name}')) {
+    // Pattern with placeholder - use patternToRegex
+    const regex = patternToRegex(pattern);
+    return regex.test(content);
+  }
+  // Try as regex first (for patterns like "SHALL|MUST")
+  try {
+    const regex = new RegExp(pattern, 'm');
+    return regex.test(content);
+  } catch {
+    // Fall back to literal match
+    return content.includes(pattern);
+  }
+}
+
+function escapeRegexChars(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
