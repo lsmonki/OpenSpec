@@ -361,3 +361,4 @@ export function formatChangeStatus(context: ChangeContext): ChangeStatus {
     artifacts: artifactStatuses,
   };
 }
+

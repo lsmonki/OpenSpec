@@ -9,6 +9,10 @@ import {
   writeUpdatedSpec,
   type SpecUpdate,
 } from './specs-apply.js';
+import { readProjectConfig } from './project-config.js';
+import { readChangeMetadata } from '../utils/change-metadata.js';
+import { resolveSchema } from './artifact-graph/resolver.js';
+import { resolveSpecArtifactFiles, type SpecArtifactFile } from './artifact-graph/schema.js';
 
 /**
  * Recursively copy a directory. Used when fs.rename fails (e.g. EPERM on Windows).
@@ -88,6 +92,17 @@ export class ArchiveCommand {
 
     const skipValidation = options.validate === false || options.noValidate === true;
 
+    // Load schema for artifact-aware detection (used by both validation and spec sync)
+    let specArtifactFiles: SpecArtifactFile[] | undefined;
+    try {
+      const metadata = readChangeMetadata(changeDir, targetPath);
+      const schemaName = metadata?.schema ?? readProjectConfig(targetPath)?.schema ?? 'spec-driven';
+      const schema = resolveSchema(schemaName, targetPath);
+      specArtifactFiles = resolveSpecArtifactFiles(schema);
+    } catch {
+      // Fall back to default detection
+    }
+
     // Validate specs and change before archiving
     if (!skipValidation) {
       const validator = new Validator();
@@ -112,25 +127,38 @@ export class ArchiveCommand {
 
       // Validate delta-formatted spec files under the change directory if present
       const changeSpecsDir = path.join(changeDir, 'specs');
+
+      const filesToCheck = specArtifactFiles?.filter(af => af.deltas?.length) ?? [
+        { filename: 'spec.md', deltas: [{ section: 'Requirements', pattern: '### Requirement: {name}' }] },
+      ];
+
+      // Build regex that matches any delta section from any artifact
+      const allSections = filesToCheck.flatMap(af => af.deltas ?? []).map(d => d.section.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+      const deltaPattern = new RegExp(`^##\\s+(ADDED|MODIFIED|REMOVED|RENAMED)\\s+(${allSections.join('|')})`, 'm');
+
       let hasDeltaSpecs = false;
       try {
         const candidates = await fs.readdir(changeSpecsDir, { withFileTypes: true });
         for (const c of candidates) {
           if (c.isDirectory()) {
-            try {
-              const candidatePath = path.join(changeSpecsDir, c.name, 'spec.md');
-              await fs.access(candidatePath);
-              const content = await fs.readFile(candidatePath, 'utf-8');
-              if (/^##\s+(ADDED|MODIFIED|REMOVED|RENAMED)\s+Requirements/m.test(content)) {
-                hasDeltaSpecs = true;
-                break;
-              }
-            } catch {}
+            for (const af of filesToCheck) {
+              try {
+                const candidatePath = path.join(changeSpecsDir, c.name, af.filename);
+                await fs.access(candidatePath);
+                const content = await fs.readFile(candidatePath, 'utf-8');
+                if (deltaPattern.test(content)) {
+                  hasDeltaSpecs = true;
+                  break;
+                }
+              } catch {}
+            }
+            if (hasDeltaSpecs) break;
           }
         }
       } catch {}
       if (hasDeltaSpecs) {
-        const deltaReport = await validator.validateChangeDeltaSpecs(changeDir);
+        const validationConfig = specArtifactFiles ? { specArtifactFiles } : undefined;
+        const deltaReport = await validator.validateChangeDeltaSpecs(changeDir, validationConfig);
         if (!deltaReport.valid) {
           hasValidationErrors = true;
           console.log(chalk.red(`\nValidation errors in change delta specs:`));
@@ -197,8 +225,8 @@ export class ArchiveCommand {
     if (options.skipSpecs) {
       console.log('Skipping spec updates (--skip-specs flag provided).');
     } else {
-      // Find specs to update
-      const specUpdates = await findSpecUpdates(changeDir, mainSpecsDir);
+      // Find specs to update (pass specArtifactFiles for multi-file delta detection)
+      const specUpdates = await findSpecUpdates(changeDir, mainSpecsDir, specArtifactFiles);
       
       if (specUpdates.length > 0) {
         console.log('\nSpecs to update:');

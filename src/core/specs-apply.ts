@@ -13,8 +13,14 @@ import {
   parseDeltaSpec,
   normalizeRequirementName,
   type RequirementBlock,
+  type RequirementFormatConfig,
 } from './parsers/requirement-blocks.js';
 import { Validator } from './validation/validator.js';
+import { readChangeMetadata } from '../utils/change-metadata.js';
+import { resolveSchema } from './artifact-graph/resolver.js';
+import { resolveSpecArtifactFiles } from './artifact-graph/schema.js';
+import { readProjectConfig } from './project-config.js';
+import type { DeltaConfig } from './artifact-graph/types.js';
 
 // -----------------------------------------------------------------------------
 // Types
@@ -24,6 +30,10 @@ export interface SpecUpdate {
   source: string;
   target: string;
   exists: boolean;
+  /** Whether this file should be delta-merged (true) or direct-copied (false) */
+  isDelta?: boolean;
+  /** Delta configs for this file (from the matching artifact's deltas[]) */
+  fileDeltaConfigs?: Array<{ section: string; pattern: string }>;
 }
 
 export interface ApplyResult {
@@ -51,24 +61,43 @@ export interface SpecsApplyOutput {
 // -----------------------------------------------------------------------------
 
 /**
- * Find all delta spec files that need to be applied from a change.
+ * Find all spec files that need to be applied from a change.
+ * Discovers all markdown files in each spec folder.
+ * Uses specArtifactFiles to determine which files are delta-merge targets.
+ * Falls back to spec.md as the only delta target when no config provided.
  */
-export async function findSpecUpdates(changeDir: string, mainSpecsDir: string): Promise<SpecUpdate[]> {
+export async function findSpecUpdates(
+  changeDir: string,
+  mainSpecsDir: string,
+  specArtifactFiles?: Array<{ filename: string; deltas?: Array<{ section: string; pattern: string }> }>,
+): Promise<SpecUpdate[]> {
   const updates: SpecUpdate[] = [];
   const changeSpecsDir = path.join(changeDir, 'specs');
+
+  // Build lookup: filename → deltas config (or undefined for direct-copy)
+  const defaultFiles = [{ filename: 'spec.md', deltas: [{ section: 'Requirements', pattern: '### Requirement: {name}' }] }];
+  const artifactFiles = specArtifactFiles ?? defaultFiles;
+  const deltaLookup = new Map<string, Array<{ section: string; pattern: string }> | undefined>();
+  for (const af of artifactFiles) {
+    deltaLookup.set(af.filename, af.deltas);
+  }
 
   try {
     const entries = await fs.readdir(changeSpecsDir, { withFileTypes: true });
 
     for (const entry of entries) {
-      if (entry.isDirectory()) {
-        const specFile = path.join(changeSpecsDir, entry.name, 'spec.md');
-        const targetFile = path.join(mainSpecsDir, entry.name, 'spec.md');
+      if (!entry.isDirectory()) continue;
+      const specFolderName = entry.name;
+      const changeSpecFolder = path.join(changeSpecsDir, specFolderName);
 
-        try {
-          await fs.access(specFile);
+      try {
+        const files = await fs.readdir(changeSpecFolder, { withFileTypes: true });
+        for (const file of files) {
+          if (!file.isFile() || !file.name.endsWith('.md')) continue;
 
-          // Check if target exists
+          const sourceFile = path.join(changeSpecFolder, file.name);
+          const targetFile = path.join(mainSpecsDir, specFolderName, file.name);
+
           let exists = false;
           try {
             await fs.access(targetFile);
@@ -77,14 +106,17 @@ export async function findSpecUpdates(changeDir: string, mainSpecsDir: string): 
             exists = false;
           }
 
+          const matchedDeltas = deltaLookup.get(file.name);
           updates.push({
-            source: specFile,
+            source: sourceFile,
             target: targetFile,
             exists,
+            isDelta: matchedDeltas !== undefined && matchedDeltas.length > 0,
+            fileDeltaConfigs: matchedDeltas,
           });
-        } catch {
-          // Source spec doesn't exist, skip
         }
+      } catch {
+        // Spec folder might not be readable, skip
       }
     }
   } catch {
@@ -100,14 +132,20 @@ export async function findSpecUpdates(changeDir: string, mainSpecsDir: string): 
  */
 export async function buildUpdatedSpec(
   update: SpecUpdate,
-  changeName: string
+  changeName: string,
+  config?: RequirementFormatConfig,
+  options?: { targetContent?: string; allowEmpty?: boolean }
 ): Promise<{ rebuilt: string; counts: { added: number; modified: number; removed: number; renamed: number } }> {
   // Read change spec content (delta-format expected)
   const changeContent = await fs.readFile(update.source, 'utf-8');
 
   // Parse deltas from the change spec file
-  const plan = parseDeltaSpec(changeContent);
+  const plan = parseDeltaSpec(changeContent, config);
   const specName = path.basename(path.dirname(update.target));
+
+  // Derive block header prefix from config pattern (e.g., "### Requirement: {name}" → "### Requirement: ")
+  const patternStr = config?.requirementPattern ?? '### Requirement: {name}';
+  const patternPrefix = patternStr.replace('{name}', '');
 
   // Pre-validate duplicates within sections
   const addedNames = new Set<string>();
@@ -115,7 +153,7 @@ export async function buildUpdatedSpec(
     const name = normalizeRequirementName(add.name);
     if (addedNames.has(name)) {
       throw new Error(
-        `${specName} validation failed - duplicate requirement in ADDED for header "### Requirement: ${add.name}"`
+        `${specName} validation failed - duplicate in ADDED for header "${patternPrefix}${add.name}"`
       );
     }
     addedNames.add(name);
@@ -125,7 +163,7 @@ export async function buildUpdatedSpec(
     const name = normalizeRequirementName(mod.name);
     if (modifiedNames.has(name)) {
       throw new Error(
-        `${specName} validation failed - duplicate requirement in MODIFIED for header "### Requirement: ${mod.name}"`
+        `${specName} validation failed - duplicate in MODIFIED for header "${patternPrefix}${mod.name}"`
       );
     }
     modifiedNames.add(name);
@@ -135,7 +173,7 @@ export async function buildUpdatedSpec(
     const name = normalizeRequirementName(rem);
     if (removedNamesSet.has(name)) {
       throw new Error(
-        `${specName} validation failed - duplicate requirement in REMOVED for header "### Requirement: ${rem}"`
+        `${specName} validation failed - duplicate in REMOVED for header "${patternPrefix}${rem}"`
       );
     }
     removedNamesSet.add(name);
@@ -147,12 +185,12 @@ export async function buildUpdatedSpec(
     const toNorm = normalizeRequirementName(to);
     if (renamedFromSet.has(fromNorm)) {
       throw new Error(
-        `${specName} validation failed - duplicate FROM in RENAMED for header "### Requirement: ${from}"`
+        `${specName} validation failed - duplicate FROM in RENAMED for header "${patternPrefix}${from}"`
       );
     }
     if (renamedToSet.has(toNorm)) {
       throw new Error(
-        `${specName} validation failed - duplicate TO in RENAMED for header "### Requirement: ${to}"`
+        `${specName} validation failed - duplicate TO in RENAMED for header "${patternPrefix}${to}"`
       );
     }
     renamedFromSet.add(fromNorm);
@@ -174,24 +212,38 @@ export async function buildUpdatedSpec(
     const toNorm = normalizeRequirementName(to);
     if (modifiedNames.has(fromNorm)) {
       throw new Error(
-        `${specName} validation failed - when a rename exists, MODIFIED must reference the NEW header "### Requirement: ${to}"`
+        `${specName} validation failed - when a rename exists, MODIFIED must reference the NEW header "${patternPrefix}${to}"`
       );
     }
     // Detect ADDED colliding with a RENAMED TO
     if (addedNames.has(toNorm)) {
       throw new Error(
-        `${specName} validation failed - RENAMED TO header collides with ADDED for "### Requirement: ${to}"`
+        `${specName} validation failed - RENAMED TO header collides with ADDED for "${patternPrefix}${to}"`
       );
     }
   }
   if (conflicts.length > 0) {
     const c = conflicts[0];
     throw new Error(
-      `${specName} validation failed - requirement present in multiple sections (${c.a} and ${c.b}) for header "### Requirement: ${c.name}"`
+      `${specName} validation failed - present in multiple sections (${c.a} and ${c.b}) for header "${patternPrefix}${c.name}"`
     );
   }
   const hasAnyDelta = plan.added.length + plan.modified.length + plan.removed.length + plan.renamed.length > 0;
   if (!hasAnyDelta) {
+    // In multi-delta mode (allowEmpty), return unchanged content when no operations found for this section
+    if (options?.allowEmpty) {
+      let unchangedContent: string;
+      if (options?.targetContent !== undefined) {
+        unchangedContent = options.targetContent;
+      } else {
+        try {
+          unchangedContent = await fs.readFile(update.target, 'utf-8');
+        } catch {
+          unchangedContent = buildSpecSkeleton(specName, changeName);
+        }
+      }
+      return { rebuilt: unchangedContent, counts: { added: 0, modified: 0, removed: 0, renamed: 0 } };
+    }
     throw new Error(
       `Delta parsing found no operations for ${path.basename(path.dirname(update.source))}. ` +
         `Provide ADDED/MODIFIED/REMOVED/RENAMED sections in change spec.`
@@ -201,30 +253,35 @@ export async function buildUpdatedSpec(
   // Load or create base target content
   let targetContent: string;
   let isNewSpec = false;
-  try {
-    targetContent = await fs.readFile(update.target, 'utf-8');
-  } catch {
-    // Target spec does not exist; MODIFIED and RENAMED are not allowed for new specs
-    // REMOVED will be ignored with a warning since there's nothing to remove
-    if (plan.modified.length > 0 || plan.renamed.length > 0) {
-      throw new Error(
-        `${specName}: target spec does not exist; only ADDED requirements are allowed for new specs. MODIFIED and RENAMED operations require an existing spec.`
-      );
+  if (options?.targetContent !== undefined) {
+    // Use provided content (for multi-delta chaining)
+    targetContent = options.targetContent;
+  } else {
+    try {
+      targetContent = await fs.readFile(update.target, 'utf-8');
+    } catch {
+      // Target spec does not exist; MODIFIED and RENAMED are not allowed for new specs
+      // REMOVED will be ignored with a warning since there's nothing to remove
+      if (plan.modified.length > 0 || plan.renamed.length > 0) {
+        throw new Error(
+          `${specName}: target spec does not exist; only ADDED requirements are allowed for new specs. MODIFIED and RENAMED operations require an existing spec.`
+        );
+      }
+      // Warn about REMOVED requirements being ignored for new specs
+      if (plan.removed.length > 0) {
+        console.log(
+          chalk.yellow(
+            `⚠️  Warning: ${specName} - ${plan.removed.length} REMOVED requirement(s) ignored for new spec (nothing to remove).`
+          )
+        );
+      }
+      isNewSpec = true;
+      targetContent = buildSpecSkeleton(specName, changeName);
     }
-    // Warn about REMOVED requirements being ignored for new specs
-    if (plan.removed.length > 0) {
-      console.log(
-        chalk.yellow(
-          `⚠️  Warning: ${specName} - ${plan.removed.length} REMOVED requirement(s) ignored for new spec (nothing to remove).`
-        )
-      );
-    }
-    isNewSpec = true;
-    targetContent = buildSpecSkeleton(specName, changeName);
   }
 
   // Extract requirements section and build name->block map
-  const parts = extractRequirementsSection(targetContent);
+  const parts = extractRequirementsSection(targetContent, config);
   const nameToBlock = new Map<string, RequirementBlock>();
   for (const block of parts.bodyBlocks) {
     nameToBlock.set(normalizeRequirementName(block.name), block);
@@ -236,13 +293,13 @@ export async function buildUpdatedSpec(
     const from = normalizeRequirementName(r.from);
     const to = normalizeRequirementName(r.to);
     if (!nameToBlock.has(from)) {
-      throw new Error(`${specName} RENAMED failed for header "### Requirement: ${r.from}" - source not found`);
+      throw new Error(`${specName} RENAMED failed for header "${patternPrefix}${r.from}" - source not found`);
     }
     if (nameToBlock.has(to)) {
-      throw new Error(`${specName} RENAMED failed for header "### Requirement: ${r.to}" - target already exists`);
+      throw new Error(`${specName} RENAMED failed for header "${patternPrefix}${r.to}" - target already exists`);
     }
     const block = nameToBlock.get(from)!;
-    const newHeader = `### Requirement: ${to}`;
+    const newHeader = `${patternPrefix}${to}`;
     const rawLines = block.raw.split('\n');
     rawLines[0] = newHeader;
     const renamedBlock: RequirementBlock = {
@@ -261,7 +318,7 @@ export async function buildUpdatedSpec(
       // For new specs, REMOVED requirements are already warned about and ignored
       // For existing specs, missing requirements are an error
       if (!isNewSpec) {
-        throw new Error(`${specName} REMOVED failed for header "### Requirement: ${name}" - not found`);
+        throw new Error(`${specName} REMOVED failed for header "${patternPrefix}${name}" - not found`);
       }
       // Skip removal for new specs (already warned above)
       continue;
@@ -273,13 +330,14 @@ export async function buildUpdatedSpec(
   for (const mod of plan.modified) {
     const key = normalizeRequirementName(mod.name);
     if (!nameToBlock.has(key)) {
-      throw new Error(`${specName} MODIFIED failed for header "### Requirement: ${mod.name}" - not found`);
+      throw new Error(`${specName} MODIFIED failed for header "${patternPrefix}${mod.name}" - not found`);
     }
     // Replace block with provided raw (ensure header line matches key)
-    const modHeaderMatch = mod.raw.split('\n')[0].match(/^###\s*Requirement:\s*(.+)\s*$/);
-    if (!modHeaderMatch || normalizeRequirementName(modHeaderMatch[1]) !== key) {
+    const headerLine = mod.raw.split('\n')[0].trim();
+    const prefixTrimmed = patternPrefix.trim();
+    if (!headerLine.startsWith(prefixTrimmed) || normalizeRequirementName(headerLine.slice(prefixTrimmed.length).trim()) !== key) {
       throw new Error(
-        `${specName} MODIFIED failed for header "### Requirement: ${mod.name}" - header mismatch in content`
+        `${specName} MODIFIED failed for header "${patternPrefix}${mod.name}" - header mismatch in content`
       );
     }
     nameToBlock.set(key, mod);
@@ -289,7 +347,7 @@ export async function buildUpdatedSpec(
   for (const add of plan.added) {
     const key = normalizeRequirementName(add.name);
     if (nameToBlock.has(key)) {
-      throw new Error(`${specName} ADDED failed for header "### Requirement: ${add.name}" - already exists`);
+      throw new Error(`${specName} ADDED failed for header "${patternPrefix}${add.name}" - already exists`);
     }
     nameToBlock.set(key, add);
   }
@@ -395,8 +453,36 @@ export async function applySpecs(
     throw new Error(`Change '${changeName}' not found.`);
   }
 
+  // Load schema for delta configuration
+  let deltaConfigs: DeltaConfig[] = [{ section: 'Requirements', pattern: '### Requirement: {name}' }];
+  let validationConfig: import('./validation/validator.js').SpecValidationConfig | undefined;
+  try {
+    const metadata = readChangeMetadata(changeDir, projectRoot);
+    const schemaName = metadata?.schema ?? readProjectConfig(projectRoot)?.schema ?? 'spec-driven';
+    const schema = resolveSchema(schemaName, projectRoot);
+    const specsArtifact = schema.artifacts.find(a => a.id === 'specs');
+    if (specsArtifact?.deltas?.length) {
+      deltaConfigs = specsArtifact.deltas;
+    }
+    // Build validation config from schema
+    const firstDelta = specsArtifact?.deltas?.[0];
+    validationConfig = {
+      requiredSections: specsArtifact?.validations
+        ?.filter(v => v.required && !v.scope && !v.eachBlock)
+        .map(v => v.pattern.replace(/^## /, '')),
+      requirementSection: firstDelta?.section,
+      requirementPattern: firstDelta?.pattern,
+      deltaConfigs: specsArtifact?.deltas,
+      validationRules: specsArtifact?.validations,
+      changeScenarioPattern: schema.changeVerify?.scenarioPattern,
+      specArtifactFiles: resolveSpecArtifactFiles(schema),
+    };
+  } catch {
+    // If schema loading fails, fall back to defaults
+  }
+
   // Find specs to update
-  const specUpdates = await findSpecUpdates(changeDir, mainSpecsDir);
+  const specUpdates = await findSpecUpdates(changeDir, mainSpecsDir, validationConfig?.specArtifactFiles);
 
   if (specUpdates.length === 0) {
     return {
@@ -407,16 +493,57 @@ export async function applySpecs(
     };
   }
 
-  // Prepare all updates first (validation pass, no writes)
+  // Separate delta-merge files from direct-copy files
+  const deltaUpdates = specUpdates.filter(u => u.isDelta !== false);
+  const directCopyUpdates = specUpdates.filter(u => u.isDelta === false);
+
+  // Prepare delta-merge updates first (validation pass, no writes)
   const prepared: Array<{
     update: SpecUpdate;
     rebuilt: string;
     counts: { added: number; modified: number; removed: number; renamed: number };
   }> = [];
 
-  for (const update of specUpdates) {
-    const built = await buildUpdatedSpec(update, changeName);
-    prepared.push({ update, rebuilt: built.rebuilt, counts: built.counts });
+  for (const update of deltaUpdates) {
+    // Use per-file delta configs if available, fall back to top-level deltaConfigs
+    const fileDeltaConfigs = update.fileDeltaConfigs ?? deltaConfigs;
+    if (fileDeltaConfigs.length <= 1) {
+      // Single delta config — pass it directly
+      const config: RequirementFormatConfig = {
+        sectionName: fileDeltaConfigs[0].section,
+        requirementPattern: fileDeltaConfigs[0].pattern,
+      };
+      const built = await buildUpdatedSpec(update, changeName, config);
+      prepared.push({ update, rebuilt: built.rebuilt, counts: built.counts });
+    } else {
+      // Multi-delta: iterate over configs, chaining rebuilt content
+      let currentContent: string | undefined;
+      const totalCounts = { added: 0, modified: 0, removed: 0, renamed: 0 };
+      for (const dc of fileDeltaConfigs) {
+        const config: RequirementFormatConfig = {
+          sectionName: dc.section,
+          requirementPattern: dc.pattern,
+        };
+        const built = await buildUpdatedSpec(update, changeName, config, {
+          targetContent: currentContent,
+          allowEmpty: true,
+        });
+        currentContent = built.rebuilt;
+        totalCounts.added += built.counts.added;
+        totalCounts.modified += built.counts.modified;
+        totalCounts.removed += built.counts.removed;
+        totalCounts.renamed += built.counts.renamed;
+      }
+      // Ensure at least one section had deltas
+      const hasAny = totalCounts.added + totalCounts.modified + totalCounts.removed + totalCounts.renamed > 0;
+      if (!hasAny) {
+        throw new Error(
+          `Delta parsing found no operations for ${path.basename(path.dirname(update.source))}. ` +
+            `Provide ADDED/MODIFIED/REMOVED/RENAMED sections in change spec.`
+        );
+      }
+      prepared.push({ update, rebuilt: currentContent!, counts: totalCounts });
+    }
   }
 
   // Validate rebuilt specs unless validation is skipped
@@ -424,7 +551,7 @@ export async function applySpecs(
     const validator = new Validator();
     for (const p of prepared) {
       const specName = path.basename(path.dirname(p.update.target));
-      const report = await validator.validateSpecContent(specName, p.rebuilt);
+      const report = await validator.validateSpecContent(specName, p.rebuilt, validationConfig);
       if (!report.valid) {
         const errors = report.issues
           .filter((i) => i.level === 'ERROR')
@@ -439,24 +566,25 @@ export async function applySpecs(
   const capabilities: ApplyResult[] = [];
   const totals = { added: 0, modified: 0, removed: 0, renamed: 0 };
 
+  // Apply delta-merge files
   for (const p of prepared) {
     const capability = path.basename(path.dirname(p.update.target));
+    const fileName = path.basename(p.update.target);
 
     if (!options.dryRun) {
-      // Write the updated spec
       const targetDir = path.dirname(p.update.target);
       await fs.mkdir(targetDir, { recursive: true });
       await fs.writeFile(p.update.target, p.rebuilt);
 
       if (!options.silent) {
-        console.log(`Applying changes to openspec/specs/${capability}/spec.md:`);
+        console.log(`Applying changes to openspec/specs/${capability}/${fileName}:`);
         if (p.counts.added) console.log(`  + ${p.counts.added} added`);
         if (p.counts.modified) console.log(`  ~ ${p.counts.modified} modified`);
         if (p.counts.removed) console.log(`  - ${p.counts.removed} removed`);
         if (p.counts.renamed) console.log(`  → ${p.counts.renamed} renamed`);
       }
     } else if (!options.silent) {
-      console.log(`Would apply changes to openspec/specs/${capability}/spec.md:`);
+      console.log(`Would apply changes to openspec/specs/${capability}/${fileName}:`);
       if (p.counts.added) console.log(`  + ${p.counts.added} added`);
       if (p.counts.modified) console.log(`  ~ ${p.counts.modified} modified`);
       if (p.counts.removed) console.log(`  - ${p.counts.removed} removed`);
@@ -472,6 +600,25 @@ export async function applySpecs(
     totals.modified += p.counts.modified;
     totals.removed += p.counts.removed;
     totals.renamed += p.counts.renamed;
+  }
+
+  // Apply direct-copy files (non-delta files like verify.md)
+  for (const update of directCopyUpdates) {
+    const capability = path.basename(path.dirname(update.target));
+    const fileName = path.basename(update.target);
+    const sourceContent = await fs.readFile(update.source, 'utf-8');
+
+    if (!options.dryRun) {
+      const targetDir = path.dirname(update.target);
+      await fs.mkdir(targetDir, { recursive: true });
+      await fs.writeFile(update.target, sourceContent);
+
+      if (!options.silent) {
+        console.log(`Copying openspec/specs/${capability}/${fileName}`);
+      }
+    } else if (!options.silent) {
+      console.log(`Would copy openspec/specs/${capability}/${fileName}`);
+    }
   }
 
   return {

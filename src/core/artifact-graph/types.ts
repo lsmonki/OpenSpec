@@ -1,5 +1,38 @@
 import { z } from 'zod';
 
+// Schema-level compliance configuration for changes
+export const ChangeVerifySchema = z.object({
+  // Which artifact has requirements/scenarios (default: specs)
+  artifact: z.string().default('specs'),
+  // Pattern to extract requirement headers from specs (e.g., "### Requirement: {name}")
+  requirementPattern: z.string().default('### Requirement: {name}'),
+  // Pattern to extract scenario headers from specs (e.g., "#### Scenario: {name}")
+  scenarioPattern: z.string().default('#### Scenario: {name}'),
+});
+
+// Delta merge configuration: defines a mergeable block section
+export const DeltaConfigSchema = z.object({
+  // Section name (e.g., "Requirements"). Delta operations derived: ## {ADDED|MODIFIED|REMOVED|RENAMED} {section}
+  section: z.string(),
+  // Block pattern within the section (e.g., "### Requirement: {name}")
+  pattern: z.string(),
+});
+
+// Structural validation rule with three granularity levels
+export const ValidationRuleSchema = z.object({
+  // Pattern to search for
+  pattern: z.string(),
+  // Whether the pattern must exist (default: true)
+  required: z.boolean().default(true),
+  // (optional) Validate within a ## section
+  scope: z.string().optional(),
+  // (optional) Validate within EACH ### block of a ## section
+  eachBlock: z.string().optional(),
+}).refine(
+  (data) => !(data.scope && data.eachBlock),
+  { message: 'scope and eachBlock are mutually exclusive — use one or the other, not both' }
+);
+
 // Artifact definition schema
 export const ArtifactSchema = z.object({
   id: z.string().min(1, { error: 'Artifact ID is required' }),
@@ -8,6 +41,10 @@ export const ArtifactSchema = z.object({
   template: z.string().min(1, { error: 'template field is required' }),
   instruction: z.string().optional(),
   requires: z.array(z.string()).default([]),
+  // Delta merge configuration (array, optional)
+  deltas: z.array(DeltaConfigSchema).optional(),
+  // Structural validation rules (array, optional)
+  validations: z.array(ValidationRuleSchema).optional(),
 });
 
 // Apply phase configuration for schema-aware apply instructions
@@ -25,6 +62,10 @@ export const SchemaYamlSchema = z.object({
   name: z.string().min(1, { error: 'Schema name is required' }),
   version: z.number().int().positive({ error: 'Version must be a positive integer' }),
   description: z.string().optional(),
+  // Schema-level compliance configuration
+  changeVerify: ChangeVerifySchema.optional(),
+  // Required artifact files in each spec folder (default: ['specs'])
+  requiredSpecArtifacts: z.array(z.string()).optional(),
   artifacts: z.array(ArtifactSchema).min(1, { error: 'At least one artifact required' }),
   // Optional apply phase configuration (for schema-aware apply instructions)
   apply: ApplyPhaseSchema.optional(),
@@ -33,6 +74,9 @@ export const SchemaYamlSchema = z.object({
 // Derived TypeScript types
 export type Artifact = z.infer<typeof ArtifactSchema>;
 export type ApplyPhase = z.infer<typeof ApplyPhaseSchema>;
+export type ChangeVerify = z.infer<typeof ChangeVerifySchema>;
+export type DeltaConfig = z.infer<typeof DeltaConfigSchema>;
+export type ValidationRule = z.infer<typeof ValidationRuleSchema>;
 export type SchemaYaml = z.infer<typeof SchemaYamlSchema>;
 
 // Per-change metadata schema

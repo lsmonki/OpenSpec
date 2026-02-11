@@ -133,12 +133,15 @@ If the user mentions a change or you detect one is relevant:
 
    | Insight Type | Where to Capture |
    |--------------|------------------|
-   | New requirement discovered | \`specs/<capability>/spec.md\` |
-   | Requirement changed | \`specs/<capability>/spec.md\` |
+   | New requirement discovered | Spec artifact in \`specs/<capability>/\` |
+   | Requirement changed | Spec artifact in \`specs/<capability>/\` |
    | Design decision made | \`design.md\` |
    | Scope changed | \`proposal.md\` |
    | New work identified | \`tasks.md\` |
    | Assumption invalidated | Relevant artifact |
+
+   Note: Each capability folder may contain multiple spec files (e.g., spec.md, verify.md).
+   Check schema.yaml \`requiredSpecArtifacts\` and artifact definitions to know which files exist.
 
    Example offers:
    - "That's a design decision. Capture it in design.md?"
@@ -481,16 +484,19 @@ After each invocation, show:
 
 The artifact types and their purpose depend on the schema. Use the \`instruction\` field from the instructions output to understand what to create.
 
-Common artifact patterns:
+**IMPORTANT: Follow the schema's artifact sequence.** The \`openspec status --json\` output tells you which
+artifacts exist and which are ready. Create the FIRST artifact with \`status: "ready"\` — do NOT skip any.
+Schemas may define more artifacts than expected (e.g., separate verification artifacts).
+Always trust the status output over assumptions about the workflow.
 
-**spec-driven schema** (proposal → specs → design → tasks):
-- **proposal.md**: Ask user about the change if not clear. Fill in Why, What Changes, Capabilities, Impact.
-  - The Capabilities section is critical - each capability listed will need a spec file.
-- **specs/<capability>/spec.md**: Create one spec per capability listed in the proposal's Capabilities section (use the capability name, not the change name).
-- **design.md**: Document technical decisions, architecture, and implementation approach.
-- **tasks.md**: Break down implementation into checkboxed tasks.
-
-For other schemas, follow the \`instruction\` field from the CLI output.
+For spec-like artifacts (ones that generate under \`specs/\`), each capability listed in the proposal needs
+its own folder. The schema may require multiple files per capability (e.g., spec.md + verify.md as separate
+artifacts with their own dependency order). To know which files are expected per capability, run:
+\`\`\`bash
+openspec schema show --json
+\`\`\`
+The \`specArtifactFiles\` array lists each file with its filename, deltas config, and validations.
+Each file corresponds to a separate artifact — create them one at a time following the status output.
 
 **Guardrails**
 - Create ONE artifact per invocation
@@ -559,9 +565,7 @@ export function getApplyChangeSkillTemplate(): SkillTemplate {
 4. **Read context files**
 
    Read the files listed in \`contextFiles\` from the apply instructions output.
-   The files depend on the schema being used:
-   - **spec-driven**: proposal, specs, design, tasks
-   - Other schemas: follow the contextFiles from CLI output
+   The files vary by schema — always follow the \`contextFiles\` list from CLI output.
 
 5. **Show current progress**
 
@@ -795,50 +799,64 @@ This is an **agent-driven** operation - you will read delta specs and directly e
 
    **IMPORTANT**: Do NOT guess or auto-select a change. Always let the user choose.
 
-2. **Find delta specs**
+2. **Find delta specs and read schema config**
 
-   Look for delta spec files in \`openspec/changes/<name>/specs/*/spec.md\`.
+   Look for delta spec files in \`openspec/changes/<name>/specs/\`. List all capability directories
+   and ALL \`.md\` files within each.
 
-   Each delta spec file contains sections like:
-   - \`## ADDED Requirements\` - New requirements to add
-   - \`## MODIFIED Requirements\` - Changes to existing requirements
-   - \`## REMOVED Requirements\` - Requirements to remove
-   - \`## RENAMED Requirements\` - Requirements to rename (FROM:/TO: format)
+   **IMPORTANT: A capability may have multiple delta files** (e.g., spec.md + verify.md).
+   Each file corresponds to a different artifact in the schema.
 
-   If no delta specs found, inform user and stop.
+   Get the schema config:
+   \`\`\`bash
+   openspec schema show <schema-name> --json
+   \`\`\`
+   This returns the full parsed config including \`specArtifactFiles\` (which files each capability needs)
+   and each artifact's \`deltas[]\` config. If not available, use defaults.
 
-3. **For each delta spec, apply changes to main specs**
+   For each artifact that generates under \`specs/\`, check its \`deltas[]\` config:
+   - \`deltas[].section\`: Section name (default: \`Requirements\`)
+   - \`deltas[].pattern\`: Header pattern (default: \`### Requirement: {name}\`)
 
-   For each capability with a delta spec at \`openspec/changes/<name>/specs/<capability>/spec.md\`:
+   Each delta file contains sections named with that artifact's configured section name:
+   - \`## ADDED <section>\` - New items to add
+   - \`## MODIFIED <section>\` - Changes to existing items
+   - \`## REMOVED <section>\` - Items to remove
+   - \`## RENAMED <section>\` - Items to rename (FROM:/TO: format)
 
-   a. **Read the delta spec** to understand the intended changes
+   If no delta spec files found, inform user and stop.
 
-   b. **Read the main spec** at \`openspec/specs/<capability>/spec.md\` (may not exist yet)
+3. **For each delta spec file, apply changes to main specs**
 
-   c. **Apply changes intelligently**:
+   For each capability directory under \`openspec/changes/<name>/specs/<capability>/\`,
+   process ALL \`.md\` files (not just spec.md):
 
-      **ADDED Requirements:**
-      - If requirement doesn't exist in main spec → add it
-      - If requirement already exists → update it to match (treat as implicit MODIFIED)
+   a. **Read the delta file** to understand the intended changes
 
-      **MODIFIED Requirements:**
-      - Find the requirement in main spec
-      - Apply the changes - this can be:
-        - Adding new scenarios (don't need to copy existing ones)
-        - Modifying existing scenarios
-        - Changing the requirement description
-      - Preserve scenarios/content not mentioned in the delta
+   b. **Read the corresponding main file** at \`openspec/specs/<capability>/<filename>\` (may not exist yet)
 
-      **REMOVED Requirements:**
-      - Remove the entire requirement block from main spec
+   c. **Apply changes intelligently** using the delta operations (ADDED/MODIFIED/REMOVED/RENAMED)
+      as described in the delta file's sections:
 
-      **RENAMED Requirements:**
-      - Find the FROM requirement, rename to TO
+      **ADDED items:**
+      - If item doesn't exist in main file → add it
+      - If item already exists → update it to match (treat as implicit MODIFIED)
 
-   d. **Create new main spec** if capability doesn't exist yet:
-      - Create \`openspec/specs/<capability>/spec.md\`
-      - Add Purpose section (can be brief, mark as TBD)
-      - Add Requirements section with the ADDED requirements
+      **MODIFIED items:**
+      - Find the item in main file
+      - Apply the changes (add new sub-items, modify descriptions, etc.)
+      - Preserve content not mentioned in the delta
+
+      **REMOVED items:**
+      - Remove the entire item block from main file
+
+      **RENAMED items:**
+      - Find the FROM item, rename to TO
+
+   d. **Create new main file** if capability doesn't exist yet:
+      - Create \`openspec/specs/<capability>/<filename>\`
+      - Add appropriate header sections based on the artifact's template
+      - Add the ADDED items
 
 4. **Show summary**
 
@@ -846,7 +864,7 @@ This is an **agent-driven** operation - you will read delta specs and directly e
    - Which capabilities were updated
    - What changes were made (requirements added/modified/removed/renamed)
 
-**Delta Spec Format Reference**
+**Delta Spec Format Reference** (default format - may differ per schema)
 
 \`\`\`markdown
 ## ADDED Requirements
@@ -874,6 +892,8 @@ The system SHALL do something new.
 - FROM: \`### Requirement: Old Name\`
 - TO: \`### Requirement: New Name\`
 \`\`\`
+
+**Note:** The section name ("Requirements") and header patterns are configurable via the project's schema.yaml. Check \`deltas[]\` for actual patterns.
 
 **Key Principle: Intelligent Merging**
 
@@ -966,7 +986,7 @@ I'll walk you through a complete change cycle—from idea to implementation—us
 1. Pick a small, real task in your codebase
 2. Explore the problem briefly
 3. Create a change (the container for our work)
-4. Build the artifacts: proposal → specs → design → tasks
+4. Build the artifacts (following the schema's artifact sequence)
 5. Implement the tasks
 6. Archive the completed change
 
@@ -1220,7 +1240,8 @@ Here's the spec:
 This format—WHEN/THEN/AND—makes requirements testable. You can literally read them as test cases.
 \`\`\`
 
-Save to \`openspec/changes/<name>/specs/<capability>/spec.md\`.
+Save to the appropriate file under \`openspec/changes/<name>/specs/<capability>/\`.
+The filename depends on the artifact being created (check \`openspec instructions\` output for the exact path).
 
 ---
 
@@ -1599,12 +1620,15 @@ If the user mentions a change or you detect one is relevant:
 
    | Insight Type | Where to Capture |
    |--------------|------------------|
-   | New requirement discovered | \`specs/<capability>/spec.md\` |
-   | Requirement changed | \`specs/<capability>/spec.md\` |
+   | New requirement discovered | Spec artifact in \`specs/<capability>/\` |
+   | Requirement changed | Spec artifact in \`specs/<capability>/\` |
    | Design decision made | \`design.md\` |
    | Scope changed | \`proposal.md\` |
    | New work identified | \`tasks.md\` |
    | Assumption invalidated | Relevant artifact |
+
+   Note: Each capability folder may contain multiple spec files (e.g., spec.md, verify.md).
+   Check schema.yaml \`requiredSpecArtifacts\` and artifact definitions to know which files exist.
 
    Example offers:
    - "That's a design decision. Capture it in design.md?"
@@ -1821,16 +1845,19 @@ After each invocation, show:
 
 The artifact types and their purpose depend on the schema. Use the \`instruction\` field from the instructions output to understand what to create.
 
-Common artifact patterns:
+**IMPORTANT: Follow the schema's artifact sequence.** The \`openspec status --json\` output tells you which
+artifacts exist and which are ready. Create the FIRST artifact with \`status: "ready"\` — do NOT skip any.
+Schemas may define more artifacts than expected (e.g., separate verification artifacts).
+Always trust the status output over assumptions about the workflow.
 
-**spec-driven schema** (proposal → specs → design → tasks):
-- **proposal.md**: Ask user about the change if not clear. Fill in Why, What Changes, Capabilities, Impact.
-  - The Capabilities section is critical - each capability listed will need a spec file.
-- **specs/<capability>/spec.md**: Create one spec per capability listed in the proposal's Capabilities section (use the capability name, not the change name).
-- **design.md**: Document technical decisions, architecture, and implementation approach.
-- **tasks.md**: Break down implementation into checkboxed tasks.
-
-For other schemas, follow the \`instruction\` field from the CLI output.
+For spec-like artifacts (ones that generate under \`specs/\`), each capability listed in the proposal needs
+its own folder. The schema may require multiple files per capability (e.g., spec.md + verify.md as separate
+artifacts with their own dependency order). To know which files are expected per capability, run:
+\`\`\`bash
+openspec schema show --json
+\`\`\`
+The \`specArtifactFiles\` array lists each file with its filename, deltas config, and validations.
+Each file corresponds to a separate artifact — create them one at a time following the status output.
 
 **Guardrails**
 - Create ONE artifact per invocation
@@ -1897,9 +1924,7 @@ export function getOpsxApplyCommandTemplate(): CommandTemplate {
 4. **Read context files**
 
    Read the files listed in \`contextFiles\` from the apply instructions output.
-   The files depend on the schema being used:
-   - **spec-driven**: proposal, specs, design, tasks
-   - Other schemas: follow the contextFiles from CLI output
+   The files vary by schema — always follow the \`contextFiles\` list from CLI output.
 
 5. **Show current progress**
 
@@ -2156,7 +2181,8 @@ export function getArchiveChangeSkillTemplate(): SkillTemplate {
    Check for delta specs at \`openspec/changes/<name>/specs/\`. If none exist, proceed without sync prompt.
 
    **If delta specs exist:**
-   - Compare each delta spec with its corresponding main spec at \`openspec/specs/<capability>/spec.md\`
+   - Compare each delta file with its corresponding main file at \`openspec/specs/<capability>/\`
+     (a capability may have multiple delta files — e.g., spec.md + verify.md)
    - Determine what changes would be applied (adds, modifications, removals, renames)
    - Show a combined summary before prompting
 
@@ -2263,8 +2289,9 @@ This skill allows you to batch-archive changes, handling spec conflicts intellig
       - If no tasks file exists, note as "No tasks"
 
    c. **Delta specs** - Check \`openspec/changes/<name>/specs/\` directory
-      - List which capability specs exist
-      - For each, extract requirement names (lines matching \`### Requirement: <name>\`)
+      - List which capability directories exist and ALL \`.md\` files within each
+      - Read schema config to find the configured header patterns for each artifact's deltas
+      - For each delta file, extract item names using the configured pattern (default: \`### Requirement: {name}\`)
 
 4. **Detect spec conflicts**
 
@@ -2384,7 +2411,7 @@ This skill allows you to batch-archive changes, handling spec conflicts intellig
 
 Example 1: Only one implemented
 \`\`\`
-Conflict: specs/auth/spec.md touched by [add-oauth, add-jwt]
+Conflict: specs/auth/ touched by [add-oauth, add-jwt]
 
 Checking add-oauth:
 - Delta adds "OAuth Provider Integration" requirement
@@ -2399,7 +2426,7 @@ Resolution: Only add-oauth is implemented. Will sync add-oauth specs only.
 
 Example 2: Both implemented
 \`\`\`
-Conflict: specs/api/spec.md touched by [add-rest-api, add-graphql]
+Conflict: specs/api/ touched by [add-rest-api, add-graphql]
 
 Checking add-rest-api (created 2026-01-10):
 - Delta adds "REST Endpoints" requirement
@@ -2493,50 +2520,64 @@ This is an **agent-driven** operation - you will read delta specs and directly e
 
    **IMPORTANT**: Do NOT guess or auto-select a change. Always let the user choose.
 
-2. **Find delta specs**
+2. **Find delta specs and read schema config**
 
-   Look for delta spec files in \`openspec/changes/<name>/specs/*/spec.md\`.
+   Look for delta spec files in \`openspec/changes/<name>/specs/\`. List all capability directories
+   and ALL \`.md\` files within each.
 
-   Each delta spec file contains sections like:
-   - \`## ADDED Requirements\` - New requirements to add
-   - \`## MODIFIED Requirements\` - Changes to existing requirements
-   - \`## REMOVED Requirements\` - Requirements to remove
-   - \`## RENAMED Requirements\` - Requirements to rename (FROM:/TO: format)
+   **IMPORTANT: A capability may have multiple delta files** (e.g., spec.md + verify.md).
+   Each file corresponds to a different artifact in the schema.
 
-   If no delta specs found, inform user and stop.
+   Get the schema config:
+   \`\`\`bash
+   openspec schema show <schema-name> --json
+   \`\`\`
+   This returns the full parsed config including \`specArtifactFiles\` (which files each capability needs)
+   and each artifact's \`deltas[]\` config. If not available, use defaults.
 
-3. **For each delta spec, apply changes to main specs**
+   For each artifact that generates under \`specs/\`, check its \`deltas[]\` config:
+   - \`deltas[].section\`: Section name (default: \`Requirements\`)
+   - \`deltas[].pattern\`: Header pattern (default: \`### Requirement: {name}\`)
 
-   For each capability with a delta spec at \`openspec/changes/<name>/specs/<capability>/spec.md\`:
+   Each delta file contains sections named with that artifact's configured section name:
+   - \`## ADDED <section>\` - New items to add
+   - \`## MODIFIED <section>\` - Changes to existing items
+   - \`## REMOVED <section>\` - Items to remove
+   - \`## RENAMED <section>\` - Items to rename (FROM:/TO: format)
 
-   a. **Read the delta spec** to understand the intended changes
+   If no delta spec files found, inform user and stop.
 
-   b. **Read the main spec** at \`openspec/specs/<capability>/spec.md\` (may not exist yet)
+3. **For each delta spec file, apply changes to main specs**
 
-   c. **Apply changes intelligently**:
+   For each capability directory under \`openspec/changes/<name>/specs/<capability>/\`,
+   process ALL \`.md\` files (not just spec.md):
 
-      **ADDED Requirements:**
-      - If requirement doesn't exist in main spec → add it
-      - If requirement already exists → update it to match (treat as implicit MODIFIED)
+   a. **Read the delta file** to understand the intended changes
 
-      **MODIFIED Requirements:**
-      - Find the requirement in main spec
-      - Apply the changes - this can be:
-        - Adding new scenarios (don't need to copy existing ones)
-        - Modifying existing scenarios
-        - Changing the requirement description
-      - Preserve scenarios/content not mentioned in the delta
+   b. **Read the corresponding main file** at \`openspec/specs/<capability>/<filename>\` (may not exist yet)
 
-      **REMOVED Requirements:**
-      - Remove the entire requirement block from main spec
+   c. **Apply changes intelligently** using the delta operations (ADDED/MODIFIED/REMOVED/RENAMED)
+      as described in the delta file's sections:
 
-      **RENAMED Requirements:**
-      - Find the FROM requirement, rename to TO
+      **ADDED items:**
+      - If item doesn't exist in main file → add it
+      - If item already exists → update it to match (treat as implicit MODIFIED)
 
-   d. **Create new main spec** if capability doesn't exist yet:
-      - Create \`openspec/specs/<capability>/spec.md\`
-      - Add Purpose section (can be brief, mark as TBD)
-      - Add Requirements section with the ADDED requirements
+      **MODIFIED items:**
+      - Find the item in main file
+      - Apply the changes (add new sub-items, modify descriptions, etc.)
+      - Preserve content not mentioned in the delta
+
+      **REMOVED items:**
+      - Remove the entire item block from main file
+
+      **RENAMED items:**
+      - Find the FROM item, rename to TO
+
+   d. **Create new main file** if capability doesn't exist yet:
+      - Create \`openspec/specs/<capability>/<filename>\`
+      - Add appropriate header sections based on the artifact's template
+      - Add the ADDED items
 
 4. **Show summary**
 
@@ -2544,7 +2585,7 @@ This is an **agent-driven** operation - you will read delta specs and directly e
    - Which capabilities were updated
    - What changes were made (requirements added/modified/removed/renamed)
 
-**Delta Spec Format Reference**
+**Delta Spec Format Reference** (default format - may differ per schema)
 
 \`\`\`markdown
 ## ADDED Requirements
@@ -2572,6 +2613,8 @@ The system SHALL do something new.
 - FROM: \`### Requirement: Old Name\`
 - TO: \`### Requirement: New Name\`
 \`\`\`
+
+**Note:** The section name ("Requirements") and header patterns are configurable via the project's schema.yaml. Check \`deltas[]\` for actual patterns.
 
 **Key Principle: Intelligent Merging**
 
@@ -2647,6 +2690,14 @@ export function getVerifyChangeSkillTemplate(): SkillTemplate {
 
    This returns the change directory and context files. Read all available artifacts from \`contextFiles\`.
 
+   **Spec file loading** (for each spec folder in \`openspec/changes/<name>/specs/<capability>/\`):
+   - Load ALL \`.md\` files in the folder — each corresponds to a different artifact in the schema
+   - Read schema config to understand each file's role (use \`openspec schema show <schema-name> --json\`):
+     - Files with \`deltas[]\` config contain requirements/items with delta operations
+     - \`changeVerify.artifact\` indicates which artifact has verification scenarios
+     - \`changeVerify.requirementPattern\` and \`changeVerify.scenarioPattern\` for extraction patterns
+   - If schema is not available, load all .md files and infer roles from content
+
 4. **Initialize verification report structure**
 
    Create a report structure with three dimensions:
@@ -2668,7 +2719,10 @@ export function getVerifyChangeSkillTemplate(): SkillTemplate {
 
    **Spec Coverage**:
    - If delta specs exist in \`openspec/changes/<name>/specs/\`:
-     - Extract all requirements (marked with "### Requirement:")
+     - Read schema format config (use \`openspec schema show <schema-name> --json\`) or use defaults:
+       - \`deltas[].pattern\` (default: \`### Requirement: {name}\`)
+       - \`changeVerify.scenarioPattern\` (default: \`#### Scenario: {name}\`)
+     - Extract all requirements using the configured pattern
      - For each requirement:
        - Search codebase for keywords related to the requirement
        - Assess if implementation likely exists
@@ -2688,7 +2742,7 @@ export function getVerifyChangeSkillTemplate(): SkillTemplate {
        - Recommendation: "Review <file>:<lines> against requirement X"
 
    **Scenario Coverage**:
-   - For each scenario in delta specs (marked with "#### Scenario:"):
+   - For each scenario in delta specs (using configured \`changeVerify.scenarioPattern\`):
      - Check if conditions are handled in code
      - Check if tests exist covering the scenario
      - If scenario appears uncovered:
@@ -2833,7 +2887,8 @@ export function getOpsxArchiveCommandTemplate(): CommandTemplate {
    Check for delta specs at \`openspec/changes/<name>/specs/\`. If none exist, proceed without sync prompt.
 
    **If delta specs exist:**
-   - Compare each delta spec with its corresponding main spec at \`openspec/specs/<capability>/spec.md\`
+   - Compare each delta file with its corresponding main file at \`openspec/specs/<capability>/\`
+     (a capability may have multiple delta files — e.g., spec.md + verify.md)
    - Determine what changes would be applied (adds, modifications, removals, renames)
    - Show a combined summary before prompting
 
@@ -2999,8 +3054,9 @@ This skill allows you to batch-archive changes, handling spec conflicts intellig
       - If no tasks file exists, note as "No tasks"
 
    c. **Delta specs** - Check \`openspec/changes/<name>/specs/\` directory
-      - List which capability specs exist
-      - For each, extract requirement names (lines matching \`### Requirement: <name>\`)
+      - List which capability directories exist and ALL \`.md\` files within each
+      - Read schema config to find the configured header patterns for each artifact's deltas
+      - For each delta file, extract item names using the configured pattern (default: \`### Requirement: {name}\`)
 
 4. **Detect spec conflicts**
 
@@ -3120,7 +3176,7 @@ This skill allows you to batch-archive changes, handling spec conflicts intellig
 
 Example 1: Only one implemented
 \`\`\`
-Conflict: specs/auth/spec.md touched by [add-oauth, add-jwt]
+Conflict: specs/auth/ touched by [add-oauth, add-jwt]
 
 Checking add-oauth:
 - Delta adds "OAuth Provider Integration" requirement
@@ -3135,7 +3191,7 @@ Resolution: Only add-oauth is implemented. Will sync add-oauth specs only.
 
 Example 2: Both implemented
 \`\`\`
-Conflict: specs/api/spec.md touched by [add-rest-api, add-graphql]
+Conflict: specs/api/ touched by [add-rest-api, add-graphql]
 
 Checking add-rest-api (created 2026-01-10):
 - Delta adds "REST Endpoints" requirement
@@ -3242,6 +3298,14 @@ export function getOpsxVerifyCommandTemplate(): CommandTemplate {
 
    This returns the change directory and context files. Read all available artifacts from \`contextFiles\`.
 
+   **Spec file loading** (for each spec folder in \`openspec/changes/<name>/specs/<capability>/\`):
+   - Load ALL \`.md\` files in the folder — each corresponds to a different artifact in the schema
+   - Read schema config to understand each file's role (use \`openspec schema show <schema-name> --json\`):
+     - Files with \`deltas[]\` config contain requirements/items with delta operations
+     - \`changeVerify.artifact\` indicates which artifact has verification scenarios
+     - \`changeVerify.requirementPattern\` and \`changeVerify.scenarioPattern\` for extraction patterns
+   - If schema is not available, load all .md files and infer roles from content
+
 4. **Initialize verification report structure**
 
    Create a report structure with three dimensions:
@@ -3263,7 +3327,10 @@ export function getOpsxVerifyCommandTemplate(): CommandTemplate {
 
    **Spec Coverage**:
    - If delta specs exist in \`openspec/changes/<name>/specs/\`:
-     - Extract all requirements (marked with "### Requirement:")
+     - Read schema format config (use \`openspec schema show <schema-name> --json\`) or use defaults:
+       - \`deltas[].pattern\` (default: \`### Requirement: {name}\`)
+       - \`changeVerify.scenarioPattern\` (default: \`#### Scenario: {name}\`)
+     - Extract all requirements using the configured pattern
      - For each requirement:
        - Search codebase for keywords related to the requirement
        - Assess if implementation likely exists
@@ -3283,7 +3350,7 @@ export function getOpsxVerifyCommandTemplate(): CommandTemplate {
        - Recommendation: "Review <file>:<lines> against requirement X"
 
    **Scenario Coverage**:
-   - For each scenario in delta specs (marked with "#### Scenario:"):
+   - For each scenario in delta specs (using configured \`changeVerify.scenarioPattern\`):
      - Check if conditions are handled in code
      - Check if tests exist covering the scenario
      - If scenario appears uncovered:

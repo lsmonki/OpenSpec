@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseSchema, SchemaValidationError } from '../../../src/core/artifact-graph/schema.js';
+import { parseSchema, SchemaValidationError, resolveArtifactFilename, resolveSpecArtifactFiles } from '../../../src/core/artifact-graph/schema.js';
 
 describe('artifact-graph/schema', () => {
   describe('parseSchema', () => {
@@ -202,6 +202,256 @@ artifacts:
 `;
       const schema = parseSchema(yaml);
       expect(schema.artifacts[0].requires).toEqual([]);
+    });
+
+    it('should apply default changeVerify and requiredSpecArtifacts', () => {
+      const yaml = `
+name: test
+version: 1
+artifacts:
+  - id: proposal
+    generates: proposal.md
+    description: Proposal
+    template: templates/proposal.md
+`;
+      const schema = parseSchema(yaml);
+      expect(schema.changeVerify).toEqual({
+        artifact: 'specs',
+        requirementPattern: '### Requirement: {name}',
+        scenarioPattern: '#### Scenario: {name}',
+      });
+      expect(schema.requiredSpecArtifacts).toEqual(['specs']);
+    });
+
+    it('should parse custom changeVerify and requiredSpecArtifacts', () => {
+      const yaml = `
+name: test
+version: 1
+changeVerify:
+  artifact: verify-custom
+  requirementPattern: "## RF: {name}"
+  scenarioPattern: "### Scenario: {name}"
+requiredSpecArtifacts:
+  - specs
+  - verify
+artifacts:
+  - id: proposal
+    generates: proposal.md
+    description: Proposal
+    template: templates/proposal.md
+`;
+      const schema = parseSchema(yaml);
+      expect(schema.changeVerify).toEqual({
+        artifact: 'verify-custom',
+        requirementPattern: '## RF: {name}',
+        scenarioPattern: '### Scenario: {name}',
+      });
+      expect(schema.requiredSpecArtifacts).toEqual(['specs', 'verify']);
+    });
+
+    it('should apply default deltas and validations to specs artifact', () => {
+      const yaml = `
+name: test
+version: 1
+artifacts:
+  - id: specs
+    generates: "specs/**/*.md"
+    description: Specs
+    template: templates/spec.md
+`;
+      const schema = parseSchema(yaml);
+      const specsArtifact = schema.artifacts.find(a => a.id === 'specs');
+      expect(specsArtifact?.deltas).toEqual([
+        { section: 'Requirements', pattern: '### Requirement: {name}' },
+      ]);
+      expect(specsArtifact?.validations).toEqual([
+        { pattern: '## Purpose', required: true },
+        { pattern: '## Requirements', required: true },
+        { pattern: '### Requirement: {name}', required: true, scope: 'Requirements' },
+        { pattern: '#### Scenario: {name}', required: true, eachBlock: 'Requirements' },
+        { pattern: 'SHALL|MUST', required: true, eachBlock: 'Requirements' },
+      ]);
+    });
+
+    it('should preserve custom deltas on specs artifact', () => {
+      const yaml = `
+name: test
+version: 1
+artifacts:
+  - id: specs
+    generates: "specs/**/*.md"
+    description: Specs
+    template: templates/spec.md
+    deltas:
+      - section: Functional Requirements
+        pattern: "## RF-{name}:"
+    validations:
+      - pattern: "## Purpose"
+        required: true
+`;
+      const schema = parseSchema(yaml);
+      const specsArtifact = schema.artifacts.find(a => a.id === 'specs');
+      expect(specsArtifact?.deltas).toEqual([
+        { section: 'Functional Requirements', pattern: '## RF-{name}:' },
+      ]);
+      expect(specsArtifact?.validations).toEqual([
+        { pattern: '## Purpose', required: true },
+      ]);
+    });
+
+    it('should not apply deltas/validations defaults to non-specs artifacts', () => {
+      const yaml = `
+name: test
+version: 1
+artifacts:
+  - id: proposal
+    generates: proposal.md
+    description: Proposal
+    template: templates/proposal.md
+`;
+      const schema = parseSchema(yaml);
+      const proposalArtifact = schema.artifacts.find(a => a.id === 'proposal');
+      expect(proposalArtifact?.deltas).toBeUndefined();
+      expect(proposalArtifact?.validations).toBeUndefined();
+    });
+
+    it('should throw on changeVerify.scenarioPattern missing {name} placeholder', () => {
+      const yaml = `
+name: test
+version: 1
+changeVerify:
+  scenarioPattern: "#### Scenario:"
+artifacts:
+  - id: proposal
+    generates: proposal.md
+    description: Proposal
+    template: templates/proposal.md
+`;
+      expect(() => parseSchema(yaml)).toThrow(SchemaValidationError);
+      expect(() => parseSchema(yaml)).toThrow(/changeVerify.scenarioPattern must include \{name\}/);
+    });
+
+    it('should throw on artifact deltas[].pattern missing {name} placeholder', () => {
+      const yaml = `
+name: test
+version: 1
+artifacts:
+  - id: specs
+    generates: "specs/**/*.md"
+    description: Specs
+    template: templates/spec.md
+    deltas:
+      - section: Requirements
+        pattern: "### Requirement:"
+`;
+      expect(() => parseSchema(yaml)).toThrow(SchemaValidationError);
+      expect(() => parseSchema(yaml)).toThrow(/deltas\[\].pattern must include \{name\}/);
+    });
+
+    it('should throw on validations entry with both scope and eachBlock', () => {
+      const yaml = `
+name: test
+version: 1
+artifacts:
+  - id: specs
+    generates: "specs/**/*.md"
+    description: Specs
+    template: templates/spec.md
+    validations:
+      - pattern: "SHALL|MUST"
+        required: true
+        scope: Requirements
+        eachBlock: Requirements
+`;
+      expect(() => parseSchema(yaml)).toThrow(SchemaValidationError);
+      expect(() => parseSchema(yaml)).toThrow(/mutually exclusive/);
+    });
+  });
+
+  describe('resolveArtifactFilename', () => {
+    it('should return last segment of concrete generates path', () => {
+      const artifact = { id: 'verify', generates: 'specs/**/verify.md', description: '', template: 'templates/verify.md', requires: [] };
+      expect(resolveArtifactFilename(artifact)).toBe('verify.md');
+    });
+
+    it('should fall back to template when generates has wildcard in last segment', () => {
+      const artifact = { id: 'specs', generates: 'specs/**/*.md', description: '', template: 'spec.md', requires: [] };
+      expect(resolveArtifactFilename(artifact)).toBe('spec.md');
+    });
+
+    it('should return last segment for simple filename', () => {
+      const artifact = { id: 'proposal', generates: 'proposal.md', description: '', template: 'templates/proposal.md', requires: [] };
+      expect(resolveArtifactFilename(artifact)).toBe('proposal.md');
+    });
+  });
+
+  describe('resolveSpecArtifactFiles', () => {
+    it('should resolve default requiredSpecArtifacts to spec.md with deltas', () => {
+      const yaml = `
+name: test
+version: 1
+artifacts:
+  - id: specs
+    generates: "specs/**/*.md"
+    description: Specs
+    template: spec.md
+`;
+      const schema = parseSchema(yaml);
+      const files = resolveSpecArtifactFiles(schema);
+
+      expect(files).toHaveLength(1);
+      expect(files[0].filename).toBe('spec.md');
+      expect(files[0].deltas).toEqual([
+        { section: 'Requirements', pattern: '### Requirement: {name}' },
+      ]);
+    });
+
+    it('should resolve multiple requiredSpecArtifacts', () => {
+      const yaml = `
+name: test
+version: 1
+requiredSpecArtifacts:
+  - specs
+  - verify
+artifacts:
+  - id: specs
+    generates: "specs/**/*.md"
+    description: Specs
+    template: spec.md
+  - id: verify
+    generates: "specs/**/verify.md"
+    description: Verification
+    template: templates/verify.md
+`;
+      const schema = parseSchema(yaml);
+      const files = resolveSpecArtifactFiles(schema);
+
+      expect(files).toHaveLength(2);
+      expect(files[0].filename).toBe('spec.md');
+      expect(files[0].deltas).toBeDefined();
+      expect(files[1].filename).toBe('verify.md');
+      expect(files[1].deltas).toBeUndefined();
+    });
+
+    it('should fall back to id.md for unknown artifact IDs', () => {
+      const yaml = `
+name: test
+version: 1
+requiredSpecArtifacts:
+  - specs
+  - unknown
+artifacts:
+  - id: specs
+    generates: "specs/**/*.md"
+    description: Specs
+    template: spec.md
+`;
+      const schema = parseSchema(yaml);
+      const files = resolveSpecArtifactFiles(schema);
+
+      expect(files).toHaveLength(2);
+      expect(files[0].filename).toBe('spec.md');
+      expect(files[1].filename).toBe('unknown.md');
     });
   });
 });
