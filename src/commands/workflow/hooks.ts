@@ -49,14 +49,6 @@ export async function hooksCommand(
       );
     }
 
-    const validPoints = new Set<string>(VALID_LIFECYCLE_POINTS);
-    if (!validPoints.has(lifecyclePoint)) {
-      spinner.stop();
-      throw new Error(
-        `Invalid lifecycle point: "${lifecyclePoint}". Valid points:\n  ${VALID_LIFECYCLE_POINTS.join('\n  ')}`
-      );
-    }
-
     // Resolve change name if provided
     let changeName: string | null = null;
     if (options.change) {
@@ -100,7 +92,7 @@ function printHooksText(output: HooksOutput): void {
   for (const hook of hooks) {
     const label = hook.source === 'schema' ? 'From schema' : 'From config';
     console.log(`### ${label}`);
-    console.log(hook.instruction.trim());
+    console.log(hook.instruction.trimEnd());
     console.log();
   }
 }

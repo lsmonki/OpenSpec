@@ -11,6 +11,7 @@ import { VALID_LIFECYCLE_POINTS } from './types.js';
 
 // Session-level cache for validation warnings (avoid repeating same warnings)
 const shownWarnings = new Set<string>();
+const validLifecyclePoints = new Set<string>(VALID_LIFECYCLE_POINTS);
 
 // Session-level cache for legacy path warnings (avoid repeating same warnings)
 const shownLegacyWarnings = new Set<string>();
@@ -495,14 +496,18 @@ export function resolveHooks(
   changeName: string | null,
   lifecyclePoint: string
 ): ResolvedHook[] {
-  const validPoints = new Set<string>(VALID_LIFECYCLE_POINTS);
-  if (!validPoints.has(lifecyclePoint)) {
+  if (!validLifecyclePoints.has(lifecyclePoint)) {
     const valid = VALID_LIFECYCLE_POINTS.join(', ');
     throw new Error(`Invalid lifecycle point: "${lifecyclePoint}". Valid points: ${valid}`);
   }
 
   const hooks: ResolvedHook[] = [];
-  const config = readProjectConfig(projectRoot);
+  let config = null;
+  try {
+    config = readProjectConfig(projectRoot);
+  } catch {
+    // If config read fails, continue without config hooks
+  }
 
   // 1. Schema hooks
   // If a change is specified, resolve schema from the change's metadata.

@@ -3,6 +3,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
 import { runCLI } from '../helpers/run-cli.js';
+import { VALID_LIFECYCLE_POINTS } from '../../src/core/artifact-graph/types.js';
 
 describe('artifact-workflow CLI commands', () => {
   let tempDir: string;
@@ -919,37 +920,26 @@ context: Updated context
         expect(output).toContain('--hook cannot be used with an artifact argument');
       }, 60000);
 
-      it('should accept pre-verify and post-verify as valid lifecycle points', async () => {
-        // Run instructions --hook with pre-verify
-        const result1 = await runCLI(
-          ['instructions', '--hook', 'pre-verify', '--json'],
+      it('should error when --schema used with --hook', async () => {
+        const result = await runCLI(
+          ['instructions', '--hook', 'pre-archive', '--schema', 'spec-driven'],
           { cwd: tempDir, timeoutMs: 30000 }
         );
-        expect(result1.exitCode).toBe(0);
-        const json1 = JSON.parse(result1.stdout);
-        expect(json1.lifecyclePoint).toBe('pre-verify');
+        expect(result.exitCode).toBe(1);
 
-        // Run instructions --hook with post-verify
-        const result2 = await runCLI(
-          ['instructions', '--hook', 'post-verify', '--json'],
+        const output = getOutput(result);
+        expect(output).toContain('--schema cannot be used with --hook');
+      }, 60000);
+
+      it.each(VALID_LIFECYCLE_POINTS)('should accept %s as a valid lifecycle point', async (point) => {
+        const result = await runCLI(
+          ['instructions', '--hook', point, '--json'],
           { cwd: tempDir, timeoutMs: 30000 }
         );
-        expect(result2.exitCode).toBe(0);
-        const json2 = JSON.parse(result2.stdout);
-        expect(json2.lifecyclePoint).toBe('post-verify');
-      }, 60000);
-
-      it('should accept all lifecycle points as valid', async () => {
-        for (const point of ['pre-explore', 'post-explore', 'pre-continue', 'post-continue', 'pre-ff', 'post-ff', 'pre-bulk-archive', 'post-bulk-archive', 'pre-onboard', 'post-onboard']) {
-          const result = await runCLI(
-            ['instructions', '--hook', point, '--json'],
-            { cwd: tempDir, timeoutMs: 30000 }
-          );
-          expect(result.exitCode).toBe(0);
-          const json = JSON.parse(result.stdout);
-          expect(json.lifecyclePoint).toBe(point);
-        }
-      }, 60000);
+        expect(result.exitCode).toBe(0);
+        const json = JSON.parse(result.stdout);
+        expect(json.lifecyclePoint).toBe(point);
+      }, 30000);
 
       it('should return schema hooks before config hooks', async () => {
         // Create a custom schema with hooks

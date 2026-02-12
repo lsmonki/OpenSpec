@@ -87,7 +87,7 @@ Output (JSON mode, without change — schema resolved from config.yaml):
 ```
 
 Output (text mode):
-```
+```text
 ## Hooks: post-archive (change: add-dark-mode)
 
 ### From schema (spec-driven)
@@ -159,7 +159,7 @@ This function:
 
 20 lifecycle points covering all operations:
 
-```
+```text
 pre-explore       post-explore       — entering/exiting explore mode
 pre-new           post-new           — creating a change
 pre-continue      post-continue      — creating an artifact (one invocation of continue)
@@ -182,7 +182,7 @@ These are defined in `VALID_LIFECYCLE_POINTS` in `types.ts` and validated at run
 
 Skills call `openspec instructions --hook` and follow the returned instructions. Example for archive skill:
 
-```
+```bash
 # Before archive operation:
 openspec instructions --hook pre-archive --change "<name>" --json
 → If hooks returned, follow each instruction in order
@@ -198,7 +198,7 @@ The same pattern applies to all skills: explore, new, continue, ff, apply, verif
 
 The `ff` skill has a nested pattern: it fires `pre-ff` at the start, then for each artifact creation it fires `pre-continue`/`post-continue` (reusing the continue hooks), and finally `post-ff` at the end:
 
-```
+```text
 ff:
   pre-ff
   ├── pre-continue → create artifact 1 → post-continue
@@ -236,7 +236,7 @@ Three levels of testing, following existing patterns in the codebase:
 ## Risks / Trade-offs
 
 - **[LLM compliance]** Hooks are instructions the LLM should follow, but there's no guarantee it will execute them perfectly. → Mitigation: Same limitation applies to artifact instructions, which work well in practice. Hook instructions should be written as clear, actionable prompts.
-- **[Hook sprawl]** Users might define too many hooks, making operations slow. → Mitigation: Start with 10 lifecycle points only. Each hook adds one CLI call + LLM reasoning time, which is bounded.
+- **[Hook sprawl]** Users might define too many hooks, making operations slow. → Mitigation: Start with 20 lifecycle points only. Each hook adds one CLI call + LLM reasoning time, which is bounded.
 - **[Schema/config conflict]** Both define hooks for the same point — user might expect override semantics. → Mitigation: Document clearly that both execute (schema first, config second). This is additive, not override.
 
 ## Resolved Questions

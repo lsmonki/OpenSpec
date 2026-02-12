@@ -32,9 +32,9 @@ import {
   type NewChangeOptions,
   type HooksOptions,
 } from '../commands/workflow/index.js';
+import { maybeShowTelemetryNotice, trackCommand, shutdown } from '../telemetry/index.js';
 
 type InstructionsActionOptions = InstructionsOptions & { hook?: string };
-import { maybeShowTelemetryNotice, trackCommand, shutdown } from '../telemetry/index.js';
 
 const program = new Command();
 const require = createRequire(import.meta.url);
@@ -454,6 +454,10 @@ program
       }
 
       if (options.hook) {
+        // --schema is not supported in hook mode
+        if (options.schema) {
+          throw new Error('--schema cannot be used with --hook');
+        }
         // Hook mode: delegate to hooksCommand
         await hooksCommand(options.hook, { change: options.change, json: options.json });
       } else if (artifactId === 'apply') {

@@ -5,68 +5,12 @@ context: |
   Package manager: pnpm
   CLI framework: Commander.js
 
-  Spec compliance:
-  - Before explore, creating or updating any artifact, or implementing/modifying code,
-    run `openspec list --specs --json` to discover existing specs and their summaries.
-    Identify relevant specs from the summaries, then read each in
-    openspec/specs/<name>/*.md.
-  - Ensure changes don't contradict existing requirements.
-  - Code must conform to all applicable spec requirements.
-  - If a spec is unclear, incomplete, or potentially conflicts with the
-    implementation, stop and inform the user. The user decides whether to
-    proceed as-is or explore an alternative approach.
-  - If a decision changes an existing spec's assumptions, note it explicitly.
-  - If new specs dependencies are discovered, update the relevant artifacts
-    (design.md, proposal.md, tasks.md, etc.) to reflect them before continuing.
-
   Cross-platform requirements:
   - This tool runs on macOS, Linux, AND Windows
   - Always use path.join() or path.resolve() for file paths - never hardcode slashes
   - Never assume forward-slash path separators
   - Tests must use path.join() for expected path values, not hardcoded strings
   - Consider case sensitivity differences in file systems
-
-hooks:
-  pre-explore:
-    instruction: "Append a line to HOOKSTEST.md in the project root: `[config] pre-explore`"
-  post-explore:
-    instruction: "Append a line to HOOKSTEST.md in the project root: `[config] post-explore`"
-  pre-new:
-    instruction: "Append a line to HOOKSTEST.md in the project root: `[config] pre-new`"
-  post-new:
-    instruction: "Append a line to HOOKSTEST.md in the project root: `[config] post-new`"
-  pre-continue:
-    instruction: "Append a line to HOOKSTEST.md in the project root: `[config] pre-continue`"
-  post-continue:
-    instruction: "Append a line to HOOKSTEST.md in the project root: `[config] post-continue`"
-  pre-ff:
-    instruction: "Append a line to HOOKSTEST.md in the project root: `[config] pre-ff`"
-  post-ff:
-    instruction: "Append a line to HOOKSTEST.md in the project root: `[config] post-ff`"
-  pre-apply:
-    instruction: "Append a line to HOOKSTEST.md in the project root: `[config] pre-apply`"
-  post-apply:
-    instruction: "Append a line to HOOKSTEST.md in the project root: `[config] post-apply`"
-  pre-verify:
-    instruction: "Append a line to HOOKSTEST.md in the project root: `[config] pre-verify`"
-  post-verify:
-    instruction: "Append a line to HOOKSTEST.md in the project root: `[config] post-verify`"
-  pre-sync:
-    instruction: "Append a line to HOOKSTEST.md in the project root: `[config] pre-sync`"
-  post-sync:
-    instruction: "Append a line to HOOKSTEST.md in the project root: `[config] post-sync`"
-  pre-archive:
-    instruction: "Append a line to HOOKSTEST.md in the project root: `[config] pre-archive`"
-  post-archive:
-    instruction: "Append a line to HOOKSTEST.md in the project root: `[config] post-archive`"
-  pre-bulk-archive:
-    instruction: "Append a line to HOOKSTEST.md in the project root: `[config] pre-bulk-archive`"
-  post-bulk-archive:
-    instruction: "Append a line to HOOKSTEST.md in the project root: `[config] post-bulk-archive`"
-  pre-onboard:
-    instruction: "Append a line to HOOKSTEST.md in the project root: `[config] pre-onboard`"
-  post-onboard:
-    instruction: "Append a line to HOOKSTEST.md in the project root: `[config] post-onboard`"
 
 rules:
   specs:

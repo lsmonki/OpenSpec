@@ -364,9 +364,9 @@ export function getNewChangeSkillTemplate(): SkillTemplate {
 
 3. **Execute pre-new hooks**
 
-   Run \`openspec instructions --hook pre-new --json\` to check for lifecycle hooks (config-only, since the change does not exist yet).
+   Run \`openspec instructions --hook pre-new --json\` to check for lifecycle hooks (schema hooks may also apply if config.yaml sets a default schema).
 
-   If the \`hooks\` array is non-empty, follow each hook's \`instruction\` in order. Complete all hook instructions before proceeding.
+   If the \`hooks\` array is non-empty, follow each hook's \`instruction\` in order (schema hooks first, then config hooks). Complete all hook instructions before proceeding.
 
    If the \`hooks\` array is empty, skip this step.
 
@@ -679,7 +679,7 @@ export function getApplyChangeSkillTemplate(): SkillTemplate {
 
    Run \`openspec instructions --hook post-apply --change "<name>" --json\` to check for lifecycle hooks.
 
-   If the \`hooks\` array is non-empty, follow each hook's \`instruction\` in order. Complete all hook instructions before displaying the summary.
+   If the \`hooks\` array is non-empty, follow each hook's \`instruction\` in order (schema hooks first, then config hooks). Complete all hook instructions before displaying the summary.
 
    If the \`hooks\` array is empty, skip this step.
 
@@ -987,7 +987,7 @@ This is an **agent-driven** operation - you will read delta specs and directly e
 
    Run \`openspec instructions --hook post-sync --change "<name>" --json\` to check for lifecycle hooks.
 
-   If the \`hooks\` array is non-empty, follow each hook's \`instruction\` in order. Complete all hook instructions before displaying the summary.
+   If the \`hooks\` array is non-empty, follow each hook's \`instruction\` in order (schema hooks first, then config hooks). Complete all hook instructions before displaying the summary.
 
    If the \`hooks\` array is empty, skip this step.
 
@@ -1877,9 +1877,9 @@ export function getOpsxNewCommandTemplate(): CommandTemplate {
 
 3. **Execute pre-new hooks**
 
-   Run \`openspec instructions --hook pre-new --json\` to check for lifecycle hooks (config-only, since the change does not exist yet).
+   Run \`openspec instructions --hook pre-new --json\` to check for lifecycle hooks (schema hooks may also apply if config.yaml sets a default schema).
 
-   If the \`hooks\` array is non-empty, follow each hook's \`instruction\` in order. Complete all hook instructions before proceeding.
+   If the \`hooks\` array is non-empty, follow each hook's \`instruction\` in order (schema hooks first, then config hooks). Complete all hook instructions before proceeding.
 
    If the \`hooks\` array is empty, skip this step.
 
@@ -2187,7 +2187,7 @@ export function getOpsxApplyCommandTemplate(): CommandTemplate {
 
    Run \`openspec instructions --hook post-apply --change "<name>" --json\` to check for lifecycle hooks.
 
-   If the \`hooks\` array is non-empty, follow each hook's \`instruction\` in order. Complete all hook instructions before displaying the summary.
+   If the \`hooks\` array is non-empty, follow each hook's \`instruction\` in order (schema hooks first, then config hooks). Complete all hook instructions before displaying the summary.
 
    If the \`hooks\` array is empty, skip this step.
 
@@ -2489,7 +2489,7 @@ export function getArchiveChangeSkillTemplate(): SkillTemplate {
 
    **Note:** The change has been moved to archive, so the \`--change\` flag may not resolve. If this fails, fall back to \`openspec instructions --hook post-archive --json\` (config-only hooks).
 
-   If the \`hooks\` array is non-empty, follow each hook's \`instruction\` in order. Complete all hook instructions before displaying the summary.
+   If the \`hooks\` array is non-empty, follow each hook's \`instruction\` in order (schema hooks first, then config hooks). Complete all hook instructions before displaying the summary.
 
    If the \`hooks\` array is empty, skip this step.
 
@@ -2678,6 +2678,10 @@ This skill allows you to batch-archive changes, handling spec conflicts intellig
       \`\`\`bash
       openspec instructions --hook post-archive --change "<name>" --json
       \`\`\`
+      **Note:** The change has been moved to archive, so the \`--change\` flag may not resolve. If this fails, fall back to:
+      \`\`\`bash
+      openspec instructions --hook post-archive --json
+      \`\`\`
       If hooks are returned, follow each instruction in order.
 
    e. **Track outcome** for each change:
@@ -2685,7 +2689,13 @@ This skill allows you to batch-archive changes, handling spec conflicts intellig
       - Failed: error during archive (record error)
       - Skipped: user chose not to archive (if applicable)
 
-10. **Display summary**
+10. **Execute post-bulk-archive hooks**
+   \`\`\`bash
+   openspec instructions --hook post-bulk-archive --json
+   \`\`\`
+   If hooks are returned, follow each instruction in order.
+
+11. **Display summary**
 
    Show final results:
 
@@ -2780,12 +2790,6 @@ Failed K changes:
 
 No active changes found. Use \`/opsx:new\` to create a new change.
 \`\`\`
-
-11. **Execute post-bulk-archive hooks**
-   \`\`\`bash
-   openspec instructions --hook post-bulk-archive --json
-   \`\`\`
-   If hooks are returned, follow each instruction in order.
 
 **Guardrails**
 - Allow any number of changes (1+ is fine, 2+ is the typical use case)
@@ -2901,7 +2905,7 @@ This is an **agent-driven** operation - you will read delta specs and directly e
 
    Run \`openspec instructions --hook post-sync --change "<name>" --json\` to check for lifecycle hooks.
 
-   If the \`hooks\` array is non-empty, follow each hook's \`instruction\` in order. Complete all hook instructions before displaying the summary.
+   If the \`hooks\` array is non-empty, follow each hook's \`instruction\` in order (schema hooks first, then config hooks). Complete all hook instructions before displaying the summary.
 
    If the \`hooks\` array is empty, skip this step.
 
@@ -3163,7 +3167,7 @@ Use clear markdown with:
 
    Run \`openspec instructions --hook post-verify --change "<name>" --json\` to check for lifecycle hooks.
 
-   If the \`hooks\` array is non-empty, follow each hook's \`instruction\` in order. Complete all hook instructions before displaying the report.`,
+   If the \`hooks\` array is non-empty, follow each hook's \`instruction\` in order (schema hooks first, then config hooks). Complete all hook instructions before displaying the report.`,
     license: 'MIT',
     compatibility: 'Requires openspec CLI.',
     metadata: { author: 'openspec', version: '1.0' },
@@ -3267,7 +3271,7 @@ export function getOpsxArchiveCommandTemplate(): CommandTemplate {
 
    **Note:** The change has been moved to archive, so the \`--change\` flag may not resolve. If this fails, fall back to \`openspec instructions --hook post-archive --json\` (config-only hooks).
 
-   If the \`hooks\` array is non-empty, follow each hook's \`instruction\` in order. Complete all hook instructions before displaying the summary.
+   If the \`hooks\` array is non-empty, follow each hook's \`instruction\` in order (schema hooks first, then config hooks). Complete all hook instructions before displaying the summary.
 
    If the \`hooks\` array is empty, skip this step.
 
@@ -3515,6 +3519,10 @@ This skill allows you to batch-archive changes, handling spec conflicts intellig
       \`\`\`bash
       openspec instructions --hook post-archive --change "<name>" --json
       \`\`\`
+      **Note:** The change has been moved to archive, so the \`--change\` flag may not resolve. If this fails, fall back to:
+      \`\`\`bash
+      openspec instructions --hook post-archive --json
+      \`\`\`
       If hooks are returned, follow each instruction in order.
 
    e. **Track outcome** for each change:
@@ -3522,7 +3530,13 @@ This skill allows you to batch-archive changes, handling spec conflicts intellig
       - Failed: error during archive (record error)
       - Skipped: user chose not to archive (if applicable)
 
-10. **Display summary**
+10. **Execute post-bulk-archive hooks**
+   \`\`\`bash
+   openspec instructions --hook post-bulk-archive --json
+   \`\`\`
+   If hooks are returned, follow each instruction in order.
+
+11. **Display summary**
 
    Show final results:
 
@@ -3617,12 +3631,6 @@ Failed K changes:
 
 No active changes found. Use \`/opsx:new\` to create a new change.
 \`\`\`
-
-11. **Execute post-bulk-archive hooks**
-   \`\`\`bash
-   openspec instructions --hook post-bulk-archive --json
-   \`\`\`
-   If hooks are returned, follow each instruction in order.
 
 **Guardrails**
 - Allow any number of changes (1+ is fine, 2+ is the typical use case)
@@ -3827,7 +3835,7 @@ Use clear markdown with:
 
    Run \`openspec instructions --hook post-verify --change "<name>" --json\` to check for lifecycle hooks.
 
-   If the \`hooks\` array is non-empty, follow each hook's \`instruction\` in order. Complete all hook instructions before displaying the report.`
+   If the \`hooks\` array is non-empty, follow each hook's \`instruction\` in order (schema hooks first, then config hooks). Complete all hook instructions before displaying the report.`
   };
 }
 /**
