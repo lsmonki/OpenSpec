@@ -486,19 +486,20 @@ This command has three modes:
 
 **Apply mode** (`openspec instructions apply --change <name>`): Returns task implementation instructions with progress tracking and context files.
 
-**Hook mode** (`openspec instructions --hook <lifecycle-point> [--change <name>]`): Returns lifecycle hooks for a given point. With `--change`, resolves hooks from the change's schema and project config. Without `--change`, resolves from `config.yaml`'s default schema and config. The `--hook` flag is mutually exclusive with the `[artifact]` positional argument — using both produces an error.
+**Hook mode** (`openspec instructions --hook <lifecycle-point> [--change <name>]`): Returns lifecycle hooks for a given point. With `--change`, resolves hooks from the change's schema and project config. Without `--change`, resolves from `config.yaml`'s default schema and config. The `--hook` flag is mutually exclusive with the `[artifact]` positional argument and with `--context` — using `--hook` with either produces an error.
 
 Valid lifecycle points: `pre-explore`, `post-explore`, `pre-new`, `post-new`, `pre-continue`, `post-continue`, `pre-ff`, `post-ff`, `pre-apply`, `post-apply`, `pre-verify`, `post-verify`, `pre-sync`, `post-sync`, `pre-archive`, `post-archive`, `pre-bulk-archive`, `post-bulk-archive`, `pre-onboard`, `post-onboard`. Note: `pre-continue`/`post-continue` hooks also fire for each artifact iteration inside the `ff` skill, and `pre-archive`/`post-archive` hooks fire for each individual change inside `bulk-archive`.
 
 **Modes:**
 
-This command operates in three modes:
+This command operates in four modes:
 
 1. **Artifact instructions** (default): Get instructions for creating a specific artifact
 2. **Apply instructions** (`apply` argument): Get task implementation instructions with progress tracking
-3. **Context-only** (`--context` flag): Return just the project context from `config.yaml`
+3. **Hook mode** (`--hook` flag): Retrieve lifecycle hooks for a given point
+4. **Context-only** (`--context` flag): Return just the project context from `config.yaml`
 
-The `--context` flag is exclusive — it cannot be combined with `--change`, `--schema`, or an artifact argument.
+The `--context` flag is exclusive — it cannot be combined with `--change`, `--schema`, `--hook`, or an artifact argument. Similarly, `--hook` cannot be combined with `--context` or an artifact argument.
 
 **Examples:**
 
