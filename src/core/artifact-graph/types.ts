@@ -111,10 +111,16 @@ export type ChangeMetadata = z.infer<typeof ChangeMetadataSchema>;
 
 // Valid lifecycle points for hooks
 export const VALID_LIFECYCLE_POINTS = [
+  'pre-explore', 'post-explore',
   'pre-new', 'post-new',
-  'pre-archive', 'post-archive',
-  'pre-sync', 'post-sync',
+  'pre-continue', 'post-continue',
+  'pre-ff', 'post-ff',
   'pre-apply', 'post-apply',
+  'pre-verify', 'post-verify',
+  'pre-sync', 'post-sync',
+  'pre-archive', 'post-archive',
+  'pre-bulk-archive', 'post-bulk-archive',
+  'pre-onboard', 'post-onboard',
 ] as const;
 
 export type LifecyclePoint = typeof VALID_LIFECYCLE_POINTS[number];
