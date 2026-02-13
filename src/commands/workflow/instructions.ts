@@ -30,6 +30,8 @@ export interface InstructionsOptions {
   change?: string;
   schema?: string;
   json?: boolean;
+  hook?: string;
+  context?: boolean;
 }
 
 export interface ApplyInstructionsOptions {
