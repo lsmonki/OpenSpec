@@ -443,7 +443,7 @@ program
   .option('--schema <name>', 'Schema override (auto-detected from config.yaml)')
   .option('--context', 'Output project context from config.yaml (incompatible with --change, --schema, artifact)')
   .option('--json', 'Output as JSON')
-  .action(async (artifactId: string | undefined, options: InstructionsOptions & { context?: boolean }) => {
+  .action(async (artifactId: string | undefined, options: InstructionsOptions) => {
     try {
       if (options.context) {
         // Validate exclusivity: --context is incompatible with other options
