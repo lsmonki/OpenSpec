@@ -73,6 +73,8 @@ Organize specs by domain — logical groupings that make sense for your system. 
 - **By component**: `api/`, `frontend/`, `workers/`
 - **By bounded context**: `ordering/`, `fulfillment/`, `inventory/`
 
+> **Tip:** The default location is `openspec/specs/`, but you can configure a different path (e.g., `specs/` at the repo root) using `specsPath` in your config. See [Customization](customization.md#custom-specs-directory).
+
 ### Spec Format
 
 A spec contains requirements, and each requirement has scenarios:

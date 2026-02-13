@@ -7,13 +7,10 @@ export const ScenarioSchema = z.object({
 
 export const RequirementSchema = z.object({
   text: z.string()
-    .min(1, VALIDATION_MESSAGES.REQUIREMENT_EMPTY)
-    .refine(
-      (text) => text.includes('SHALL') || text.includes('MUST'),
-      VALIDATION_MESSAGES.REQUIREMENT_NO_SHALL
-    ),
-  scenarios: z.array(ScenarioSchema)
-    .min(1, VALIDATION_MESSAGES.REQUIREMENT_NO_SCENARIOS),
+    .min(1, VALIDATION_MESSAGES.REQUIREMENT_EMPTY),
+  // Note: SHALL/MUST validation and scenarios.min(1) moved to validator
+  // to allow configurable validation based on schema settings
+  scenarios: z.array(ScenarioSchema),
 });
 
 export type Scenario = z.infer<typeof ScenarioSchema>;

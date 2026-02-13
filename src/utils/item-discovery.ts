@@ -1,5 +1,8 @@
 import { promises as fs } from 'fs';
 import path from 'path';
+import { findAllSpecs } from './spec-discovery.js';
+import { resolveSpecsPaths } from './specs-path.js';
+import { readProjectConfig } from '../core/project-config.js';
 
 export async function getActiveChangeIds(root: string = process.cwd()): Promise<string[]> {
   const changesPath = path.join(root, 'openspec', 'changes');
@@ -22,25 +25,37 @@ export async function getActiveChangeIds(root: string = process.cwd()): Promise<
   }
 }
 
-export async function getSpecIds(root: string = process.cwd()): Promise<string[]> {
-  const specsPath = path.join(root, 'openspec', 'specs');
-  const result: string[] = [];
+export async function getSpecIds(root: string = process.cwd(), requiredFilenames?: string[]): Promise<string[]> {
+  const projectConfig = readProjectConfig(root);
+  const specsPaths = resolveSpecsPaths(root, projectConfig?.specsPath);
+  const specsPath = specsPaths.absolute;
   try {
-    const entries = await fs.readdir(specsPath, { withFileTypes: true });
-    for (const entry of entries) {
-      if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
-      const specFile = path.join(specsPath, entry.name, 'spec.md');
-      try {
-        await fs.access(specFile);
-        result.push(entry.name);
-      } catch {
-        // ignore
+    // Use hierarchical spec discovery that supports nested structures
+    const specs = findAllSpecs(specsPath);
+
+    // If additional required filenames are specified, filter specs that have all of them
+    if (requiredFilenames && requiredFilenames.length > 0) {
+      const result: string[] = [];
+      for (const spec of specs) {
+        const specDir = path.dirname(spec.path);
+        let allExist = true;
+        for (const filename of requiredFilenames) {
+          try {
+            await fs.access(path.join(specDir, filename));
+          } catch {
+            allExist = false;
+            break;
+          }
+        }
+        if (allExist) result.push(spec.capability);
       }
+      return result.sort();
     }
+
+    return specs.map(spec => spec.capability).sort();
   } catch {
-    // ignore
+    return [];
   }
-  return result.sort();
 }
 
 export async function getArchivedChangeIds(root: string = process.cwd()): Promise<string[]> {

@@ -7,6 +7,16 @@ export interface Section {
   children: Section[];
 }
 
+/**
+ * Configuration for spec format, derived from schema artifact sections.
+ */
+export interface SpecFormatConfig {
+  /** Required section names (default: ['Purpose', 'Requirements']) */
+  requiredSections?: string[];
+  /** Name of the section containing requirements (default: 'Requirements') */
+  requirementSection?: string;
+}
+
 export class MarkdownParser {
   private lines: string[];
   private currentLine: number;
@@ -21,18 +31,25 @@ export class MarkdownParser {
     return content.replace(/\r\n?/g, '\n');
   }
 
-  parseSpec(name: string): Spec {
+  parseSpec(name: string, config?: SpecFormatConfig): Spec {
     const sections = this.parseSections();
-    const purpose = this.findSection(sections, 'Purpose')?.content || '';
-    
-    const requirementsSection = this.findSection(sections, 'Requirements');
-    
+
+    // Use config or defaults
+    const requiredSections = config?.requiredSections ?? ['Purpose', 'Requirements'];
+    const requirementSectionName = config?.requirementSection ?? 'Requirements';
+
+    // Find Purpose section (first required section or 'Purpose')
+    const purposeSectionName = requiredSections[0] === 'Purpose' ? 'Purpose' : requiredSections[0];
+    const purpose = this.findSection(sections, purposeSectionName)?.content || '';
+
+    const requirementsSection = this.findSection(sections, requirementSectionName);
+
     if (!purpose) {
-      throw new Error('Spec must have a Purpose section');
+      throw new Error(`Spec must have a ${purposeSectionName} section`);
     }
-    
+
     if (!requirementsSection) {
-      throw new Error('Spec must have a Requirements section');
+      throw new Error(`Spec must have a ${requirementSectionName} section`);
     }
 
     const requirements = this.parseRequirements(requirementsSection);
@@ -144,17 +161,17 @@ export class MarkdownParser {
 
   protected parseRequirements(section: Section): Requirement[] {
     const requirements: Requirement[] = [];
-    
+
     for (const child of section.children) {
       // Extract requirement text from first non-empty content line, fall back to heading
       let text = child.title;
-      
+
       // Get content before any child sections (scenarios)
       if (child.content.trim()) {
         // Split content into lines and find content before any child headers
         const lines = child.content.split('\n');
         const contentBeforeChildren: string[] = [];
-        
+
         for (const line of lines) {
           // Stop at child headers (scenarios start with ####)
           if (line.trim().startsWith('#')) {
@@ -162,7 +179,7 @@ export class MarkdownParser {
           }
           contentBeforeChildren.push(line);
         }
-        
+
         // Find first non-empty line
         const directContent = contentBeforeChildren.join('\n').trim();
         if (directContent) {
@@ -172,30 +189,30 @@ export class MarkdownParser {
           }
         }
       }
-      
+
       const scenarios = this.parseScenarios(child);
-      
+
       requirements.push({
         text,
         scenarios,
       });
     }
-    
+
     return requirements;
   }
 
   protected parseScenarios(requirementSection: Section): Scenario[] {
     const scenarios: Scenario[] = [];
-    
+
     for (const scenarioSection of requirementSection.children) {
       // Store the raw text content of the scenario section
       if (scenarioSection.content.trim()) {
         scenarios.push({
-          rawText: scenarioSection.content
+          rawText: scenarioSection.content,
         });
       }
     }
-    
+
     return scenarios;
   }
 

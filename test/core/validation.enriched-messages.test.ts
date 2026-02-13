@@ -44,10 +44,11 @@ There are changes proposed, but no delta specs provided yet.`;
     expect(report.valid).toBe(false);
     const msg = report.issues.map(i => i.message).join('\n');
     expect(msg).toContain('Spec must have a Purpose section');
-    expect(msg).toContain('Expected headers: "## Purpose" and "## Requirements"');
+    expect(msg).toContain('Spec files must include');
+    expect(msg).toContain('## Purpose');
   });
 
-  it('warns with scenario conversion template when missing scenarios', async () => {
+  it('reports missing scenarios via validationRules eachBlock', async () => {
     const specContent = `# Test Spec
 
 ## Purpose
@@ -62,13 +63,62 @@ Text of requirement
     await fs.writeFile(specPath, specContent);
 
     const validator = new Validator();
-    const report = await validator.validateSpec(specPath);
+    const report = await validator.validateSpec(specPath, {
+      validationRules: [
+        { pattern: '## Purpose', required: true },
+        { pattern: '## Requirements', required: true },
+        { pattern: '#### Scenario: {name}', required: true, eachBlock: 'Requirements' },
+        { pattern: 'SHALL|MUST', required: true, eachBlock: 'Requirements' },
+      ],
+    });
     expect(report.valid).toBe(false);
-    const warn = report.issues.find(i => i.path.includes('requirements[0].scenarios'));
-    expect(warn?.message).toContain('Requirement must have at least one scenario');
-    expect(warn?.message).toContain('Scenarios must use level-4 headers');
-    expect(warn?.message).toContain('#### Scenario:');
+    const scenarioIssue = report.issues.find(i => i.message.includes('Scenario'));
+    expect(scenarioIssue).toBeDefined();
+    expect(scenarioIssue!.message).toContain('#### Scenario: {name}');
+  });
+
+  it('shows custom scenario pattern in validationRules error message', async () => {
+    const specContent = `# Test Spec
+
+## Purpose
+This is a sufficiently long purpose section.
+
+## Requirements
+
+### Requirement: Foo SHALL be described
+Text of requirement
+`;
+    const specPath = path.join(testDir, 'spec.md');
+    await fs.writeFile(specPath, specContent);
+
+    const validator = new Validator();
+    const report = await validator.validateSpec(specPath, {
+      validationRules: [
+        { pattern: '## Purpose', required: true },
+        { pattern: '## Requirements', required: true },
+        { pattern: '### Scenario: {name}', required: true, eachBlock: 'Requirements' },
+      ],
+    });
+    const scenarioIssue = report.issues.find(i => i.message.includes('Scenario'));
+    expect(scenarioIssue).toBeDefined();
+    expect(scenarioIssue!.message).toContain('### Scenario:'); // Shows configured pattern, not default
+  });
+
+  it('shows schema-configured section names in error message', async () => {
+    const specContent = `# Test Spec
+
+## Overview
+This is the overview section.
+`;
+    const specPath = path.join(testDir, 'spec.md');
+    await fs.writeFile(specPath, specContent);
+
+    const validator = new Validator();
+    const config = {
+      requiredSections: ['Overview', 'Functional Requirements'],
+    };
+    const report = await validator.validateSpec(specPath, config);
+    const msg = report.issues.map(i => i.message).join('\n');
+    expect(msg).toContain('Functional Requirements'); // Shows configured section name
   });
 });
-
-

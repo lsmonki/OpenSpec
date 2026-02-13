@@ -91,6 +91,123 @@ When OpenSpec needs a schema, it checks in this order:
 
 ---
 
+## Custom Specs Directory
+
+By default, OpenSpec stores archived specifications in `openspec/specs/`. You can configure a different location using the `specsPath` option in your config:
+
+```yaml
+# openspec/config.yaml
+schema: spec-driven
+specsPath: docs/specifications  # Custom location for archived specs
+
+context: |
+  ...
+```
+
+### Cross-Platform Paths
+
+The `specsPath` value accepts both forward slashes (`/`) and backslashes (`\`):
+
+```yaml
+# These are equivalent
+specsPath: docs/specs
+specsPath: docs\specs
+```
+
+OpenSpec normalizes the path for your operating system automatically.
+
+### After Changing specsPath
+
+When you change the `specsPath` in your config, you must regenerate the skill files so they reference the correct location:
+
+```bash
+openspec update
+```
+
+This updates the AI skill templates with your configured specs path. Without this step, AI instructions will still reference the old location.
+
+### External Paths (Monorepos)
+
+By default, `specsPath` must resolve inside your project root. If you need to point to a shared specs directory outside the project (e.g., in a monorepo), set `allowExternalPaths: true`:
+
+```yaml
+# openspec/config.yaml
+schema: spec-driven
+specsPath: ../../shared/specs
+allowExternalPaths: true
+```
+
+**Example monorepo structure:**
+
+```text
+company/
+├── shared/
+│   └── specs/              # Shared specs
+├── team-a/
+│   └── project/            # Your project
+│       └── openspec/
+│           └── config.yaml # specsPath: ../../shared/specs
+└── team-b/
+    └── project/
+```
+
+**Security behavior:**
+
+- **Without `allowExternalPaths`** (default): external paths produce an error with a message suggesting the flag
+- **With `allowExternalPaths: true`**: external paths work with a one-time warning per CLI invocation
+
+### Security Restrictions
+
+The following restrictions always apply, regardless of `allowExternalPaths`:
+
+**System directory protection** — Paths resolving into protected OS directories are always blocked:
+- **Linux**: `/etc`, `/usr`, `/bin`, `/sbin`, `/boot`, `/proc`, `/sys`, `/dev`, `/root`
+- **macOS**: `/System`, `/Library`, `/Applications` (plus Linux paths)
+- **Windows**: `C:\Windows`, `C:\Program Files`, `C:\Program Files (x86)`, `C:\ProgramData`
+
+**Parent traversal limit** — Paths with more than 3 `..` segments are always blocked:
+
+```yaml
+# OK (1-3 levels up)
+specsPath: ../shared-specs
+specsPath: ../../team-shared/specs
+specsPath: ../../../org-wide/specs
+
+# Blocked (4+ levels up)
+specsPath: ../../../../too-far/specs
+```
+
+### Using specsPath in Custom Schemas
+
+When creating custom schemas, use the `{{specsPath}}` placeholder instead of hardcoding paths. This ensures your schema works correctly regardless of the project's configured specs location.
+
+**In schema.yaml instructions:**
+
+```yaml
+# Good - uses placeholder
+instruction: |
+  Check existing specs in {{specsPath}}/<capability-path>/ before creating new ones.
+  Modified capabilities should reference {{specsPath}}/<existing-name>/.
+
+# Avoid - hardcoded path
+instruction: |
+  Check existing specs in openspec/specs/<capability-path>/ before creating new ones.
+```
+
+**In templates:**
+
+```markdown
+<!-- templates/proposal.md -->
+### Modified Capabilities
+<!-- Use existing spec names from {{specsPath}}/. Leave empty if no changes. -->
+```
+
+The `{{specsPath}}` placeholder is automatically replaced with the project's configured path when generating artifacts.
+
+> **Note:** OpenSpec will warn if it detects hardcoded `openspec/specs` paths in custom schemas and auto-replace them, but using the placeholder explicitly is preferred.
+
+---
+
 ## Custom Schemas
 
 When project config isn't enough, create your own schema with a completely custom workflow. Custom schemas live in your project's `openspec/schemas/` directory and are version-controlled with your code.
@@ -197,6 +314,198 @@ apply:
 | `instruction` | AI instructions for creating this artifact |
 | `requires` | Dependencies - which artifacts must exist first |
 
+### Custom Spec Formats
+
+By default, OpenSpec expects specs to follow a specific format with `## Requirements`, `### Requirement: {name}`, and `#### Scenario: {name}` headers. You can customize this format using three schema configuration areas: `changeVerify` (schema-level), `requiredSpecArtifacts` (schema-level), `deltas[]` (per-artifact), and `validations[]` (per-artifact).
+
+#### Change Verification (`changeVerify`)
+
+Schema-level configuration for change compliance and requirement/scenario extraction patterns used by `/opsx:verify`:
+
+```yaml
+changeVerify:
+  artifact: specs                            # Which artifact has requirements/scenarios
+  requirementPattern: "### Requirement: {name}"  # Pattern to extract requirement headers
+  scenarioPattern: "#### Scenario: {name}"       # Pattern to extract scenario headers
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `artifact` | `specs` | Which artifact has requirements and scenarios. |
+| `requirementPattern` | `### Requirement: {name}` | Pattern to extract requirement headers from specs. Used by `/opsx:verify`. |
+| `scenarioPattern` | `#### Scenario: {name}` | Pattern to extract scenario headers from specs. Used by `/opsx:verify`. |
+
+Normative keyword validation (e.g., `SHALL|MUST`) is configured per-artifact via `validations[]` eachBlock rules, not in `changeVerify`.
+
+#### Required Spec Artifacts (`requiredSpecArtifacts`)
+
+Declares which artifact files must exist in each spec folder:
+
+```yaml
+requiredSpecArtifacts:
+  - specs        # spec.md must exist
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `requiredSpecArtifacts` | `['specs']` | Array of artifact IDs whose files must exist in each spec folder. Validated by `openspec validate --specs`. |
+
+#### Delta Configuration (`deltas[]`)
+
+Per-artifact configuration for delta merge operations. Each entry defines a mergeable section:
+
+```yaml
+artifacts:
+  - id: specs
+    generates: "specs/**/*.md"
+    deltas:
+      - section: Requirements
+        pattern: "### Requirement: {name}"
+      - section: Constraints              # Multiple delta sections supported
+        pattern: "### Constraint: {name}"
+```
+
+| Field | Description |
+|-------|-------------|
+| `section` | Section name (e.g., "Requirements"). Delta operations are derived: `## ADDED Requirements`, `## MODIFIED Requirements`, etc. |
+| `pattern` | Block pattern within the section. Must include `{name}` placeholder. |
+
+When a spec artifact has `deltas[]`, change specs can use delta operations (`## ADDED <section>`, `## MODIFIED <section>`, `## REMOVED <section>`, `## RENAMED <section>`) for each configured section.
+
+#### Structural Validations (`validations[]`)
+
+Per-artifact validation rules with three granularity levels:
+
+```yaml
+artifacts:
+  - id: specs
+    generates: "specs/**/*.md"
+    validations:
+      # File-level: pattern must exist anywhere in file
+      - pattern: "## Purpose"
+        required: true
+      - pattern: "## Requirements"
+        required: true
+
+      # Scope-level: pattern must exist within ## section
+      - pattern: "### Requirement: {name}"
+        required: true
+        scope: Requirements
+
+      # eachBlock-level: pattern must exist in EACH ### block within ## section
+      - pattern: "#### Scenario: {name}"
+        required: true
+        eachBlock: Requirements
+      - pattern: "SHALL|MUST"
+        required: true
+        eachBlock: Requirements
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `pattern` | (required) | Pattern to validate. Can be literal, regex, or use `{name}` placeholder. |
+| `required` | `true` | Whether the pattern must be present. |
+| `scope` | (none) | Validate within a specific `## Section`. |
+| `eachBlock` | (none) | Validate within each `###` block of a `## Section`. |
+
+> **Note:** `scope` and `eachBlock` are mutually exclusive — use one or the other on a given rule, not both.
+
+#### Examples
+
+**Custom requirement pattern:**
+
+```yaml
+artifacts:
+  - id: specs
+    deltas:
+      - section: Requirements
+        pattern: "### Req: {name}"
+    validations:
+      - pattern: "## Purpose"
+        required: true
+      - pattern: "### Req: {name}"
+        required: true
+        scope: Requirements
+```
+
+**Multiple delta sections (Requirements + Constraints):**
+
+```yaml
+artifacts:
+  - id: specs
+    deltas:
+      - section: Requirements
+        pattern: "### Requirement: {name}"
+      - section: Constraints
+        pattern: "### Constraint: {name}"
+    validations:
+      - pattern: "## Purpose"
+        required: true
+      - pattern: "## Requirements"
+        required: true
+      - pattern: "## Constraints"
+        required: true
+      - pattern: "SHALL|MUST"
+        required: true
+        eachBlock: Requirements
+```
+
+**eachBlock validation (pattern in every requirement):**
+
+```yaml
+validations:
+  - pattern: "#### Scenario: {name}"
+    required: true
+    eachBlock: Requirements   # Every ### block in ## Requirements must have a scenario
+```
+
+**Spanish normative keywords (via validations[]):**
+
+```yaml
+validations:
+  - pattern: "DEBE|DEBERÁ"
+    required: true
+    eachBlock: Requirements
+```
+
+**Disable normative validation:**
+
+Simply omit the normative keyword rule from `validations[]`.
+
+**Case-insensitive normative keywords:**
+
+```yaml
+validations:
+  - pattern: "[Ss][Hh][Aa][Ll][Ll]|[Mm][Uu][Ss][Tt]"
+    required: true
+    eachBlock: Requirements
+```
+
+**Scenarios in separate file:**
+
+```yaml
+requiredSpecArtifacts:
+  - specs
+  - verify
+
+artifacts:
+  - id: specs
+    generates: "specs/**/spec.md"
+    validations:
+      - pattern: "## Purpose"
+        required: true
+      - pattern: "## Requirements"
+        required: true
+      # No scenario eachBlock rule here — scenarios live in verify artifact
+  - id: verify
+    generates: "specs/**/verify.md"
+    requires: [specs]
+```
+
+**Optional scenarios:**
+
+Simply omit the scenario `eachBlock` rule from `validations[]`.
+
 ### Templates
 
 Templates are markdown files that guide the AI. They're injected into the prompt when creating that artifact.
@@ -265,6 +574,38 @@ Output shows whether it's from your project, user directory, or the package:
 Schema: my-workflow
 Source: project
 Path: /path/to/project/openspec/schemas/my-workflow
+```
+
+### Inspect Schema Configuration
+
+To see the parsed configuration of a schema (including resolved defaults):
+
+```bash
+# Show the project's configured schema (or spec-driven if none configured)
+openspec schema show --json
+
+# Show a specific schema
+openspec schema show my-workflow --json
+
+# Include instruction fields (omitted by default to save tokens)
+openspec schema show --json --full
+```
+
+By default, `instruction` fields on artifacts and `apply` are omitted to reduce output size (~65% smaller). Use `--full` to include them when debugging.
+
+Output includes:
+- `specArtifactFiles`: Resolved filenames per required spec artifact (e.g., `spec.md`, `verify.md`)
+- `changeVerify`: Patterns for requirement/scenario extraction
+- `artifacts`: All artifact definitions with `deltas` and `validations` (plus `instruction` with `--full`)
+- `apply`: Apply phase configuration (plus `instruction` with `--full`)
+- `source`: Where the schema was resolved from (`project`, `user`, or `package`)
+
+### Inspect Artifact Instructions
+
+To see what instructions the AI receives for a specific artifact (useful for debugging why an artifact isn't being created correctly):
+
+```bash
+openspec instructions <artifact-id> --change "<name>" --json
 ```
 
 ---

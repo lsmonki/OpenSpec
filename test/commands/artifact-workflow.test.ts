@@ -3,6 +3,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
 import { runCLI } from '../helpers/run-cli.js';
+import { VALID_LIFECYCLE_POINTS } from '../../src/core/artifact-graph/types.js';
 
 describe('artifact-workflow CLI commands', () => {
   let tempDir: string;
@@ -549,6 +550,167 @@ artifacts:
       expect(json.state).toBe('ready');
       expect(json.instruction).toContain('All required artifacts complete');
     });
+
+    it('includes project context when config.yaml has context field', async () => {
+      await createTestChange('context-apply', ['proposal', 'design', 'specs', 'tasks']);
+
+      // Create config.yaml with context
+      await fs.writeFile(
+        path.join(tempDir, 'openspec', 'config.yaml'),
+        'schema: spec-driven\ncontext: |\n  Tech stack: TypeScript\n  Cross-platform: yes\n'
+      );
+
+      const result = await runCLI(
+        ['instructions', 'apply', '--change', 'context-apply', '--json'],
+        { cwd: tempDir }
+      );
+      expect(result.exitCode).toBe(0);
+
+      const json = JSON.parse(result.stdout);
+      expect(json.context).toContain('Tech stack: TypeScript');
+      expect(json.context).toContain('Cross-platform: yes');
+    });
+
+    it('includes project context in text output', async () => {
+      await createTestChange('context-text-apply', ['proposal', 'design', 'specs', 'tasks']);
+
+      await fs.writeFile(
+        path.join(tempDir, 'openspec', 'config.yaml'),
+        'schema: spec-driven\ncontext: |\n  Tech stack: TypeScript\n'
+      );
+
+      const result = await runCLI(
+        ['instructions', 'apply', '--change', 'context-text-apply'],
+        { cwd: tempDir }
+      );
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain('<project_context>');
+      expect(result.stdout).toContain('Tech stack: TypeScript');
+      expect(result.stdout).toContain('</project_context>');
+    });
+
+    it('omits context when config.yaml has no context field', async () => {
+      await createTestChange('no-context-apply', ['proposal', 'design', 'specs', 'tasks']);
+
+      // Create config.yaml without context
+      await fs.writeFile(
+        path.join(tempDir, 'openspec', 'config.yaml'),
+        'schema: spec-driven\n'
+      );
+
+      const result = await runCLI(
+        ['instructions', 'apply', '--change', 'no-context-apply', '--json'],
+        { cwd: tempDir }
+      );
+      expect(result.exitCode).toBe(0);
+
+      const json = JSON.parse(result.stdout);
+      expect(json.context).toBeUndefined();
+    });
+
+    it('omits context when no config.yaml exists', async () => {
+      await createTestChange('no-config-apply', ['proposal', 'design', 'specs', 'tasks']);
+
+      const result = await runCLI(
+        ['instructions', 'apply', '--change', 'no-config-apply', '--json'],
+        { cwd: tempDir }
+      );
+      expect(result.exitCode).toBe(0);
+
+      const json = JSON.parse(result.stdout);
+      expect(json.context).toBeUndefined();
+    });
+  });
+
+  describe('instructions --context command', () => {
+    it('returns project context as JSON', async () => {
+      await fs.writeFile(
+        path.join(tempDir, 'openspec', 'config.yaml'),
+        'schema: spec-driven\ncontext: |\n  Tech stack: TypeScript\n  Cross-platform: yes\n'
+      );
+
+      const result = await runCLI(['instructions', '--context', '--json'], {
+        cwd: tempDir,
+      });
+      expect(result.exitCode).toBe(0);
+
+      const json = JSON.parse(result.stdout);
+      expect(json.context).toContain('Tech stack: TypeScript');
+      expect(json.context).toContain('Cross-platform: yes');
+    });
+
+    it('returns project context as text', async () => {
+      await fs.writeFile(
+        path.join(tempDir, 'openspec', 'config.yaml'),
+        'schema: spec-driven\ncontext: |\n  Tech stack: TypeScript\n'
+      );
+
+      const result = await runCLI(['instructions', '--context'], {
+        cwd: tempDir,
+      });
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain('Tech stack: TypeScript');
+    });
+
+    it('returns null context when no config exists', async () => {
+      const result = await runCLI(['instructions', '--context', '--json'], {
+        cwd: tempDir,
+      });
+      expect(result.exitCode).toBe(0);
+
+      const json = JSON.parse(result.stdout);
+      expect(json.context).toBeNull();
+    });
+
+    it('returns null context when config has no context field', async () => {
+      await fs.writeFile(
+        path.join(tempDir, 'openspec', 'config.yaml'),
+        'schema: spec-driven\n'
+      );
+
+      const result = await runCLI(['instructions', '--context', '--json'], {
+        cwd: tempDir,
+      });
+      expect(result.exitCode).toBe(0);
+
+      const json = JSON.parse(result.stdout);
+      expect(json.context).toBeNull();
+    });
+
+    it('returns empty output in text mode when no context', async () => {
+      const result = await runCLI(['instructions', '--context'], {
+        cwd: tempDir,
+      });
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout.trim()).toBe('');
+    });
+
+    it('errors when combined with --change', async () => {
+      const result = await runCLI(
+        ['instructions', '--context', '--change', 'some-change'],
+        { cwd: tempDir }
+      );
+      expect(result.exitCode).not.toBe(0);
+      expect(getOutput(result)).toContain('--context cannot be combined with --change');
+    });
+
+    it('errors when combined with --schema', async () => {
+      const result = await runCLI(
+        ['instructions', '--context', '--schema', 'some-schema'],
+        { cwd: tempDir }
+      );
+      expect(result.exitCode).not.toBe(0);
+      expect(getOutput(result)).toContain('--context cannot be combined with --schema');
+    });
+
+    it('errors when combined with artifact argument', async () => {
+      const result = await runCLI(
+        ['instructions', 'proposal', '--context'],
+        { cwd: tempDir }
+      );
+      expect(result.exitCode).not.toBe(0);
+      expect(getOutput(result)).toContain('--context cannot be combined with an artifact argument');
+    });
   });
 
   describe('help text', () => {
@@ -839,6 +1001,203 @@ context: Updated context
         expect(result2.exitCode).toBe(0);
         expect(result2.stdout).toContain('Updated context');
         expect(result2.stdout).not.toContain('Initial context');
+      }, 60000);
+    });
+
+    describe('instructions --hook', () => {
+      it('should show hooks for a lifecycle point with config hooks', async () => {
+        // Create config.yaml with hooks
+        await fs.writeFile(
+          path.join(tempDir, 'openspec', 'config.yaml'),
+          `hooks:
+  pre-archive:
+    instruction: "Run pre-archive check"
+`
+        );
+
+        // Run instructions --hook without --change flag
+        const result = await runCLI(['instructions', '--hook', 'pre-archive'], { cwd: tempDir, timeoutMs: 30000 });
+        expect(result.exitCode).toBe(0);
+
+        const output = getOutput(result);
+        expect(output).toContain('Run pre-archive check');
+        expect(output).toContain('From config');
+      }, 60000);
+
+      it('should output JSON format', async () => {
+        // Create config.yaml with hooks
+        await fs.writeFile(
+          path.join(tempDir, 'openspec', 'config.yaml'),
+          `hooks:
+  pre-archive:
+    instruction: "Run pre-archive check"
+`
+        );
+
+        // Run instructions --hook with --json flag
+        const result = await runCLI(
+          ['instructions', '--hook', 'pre-archive', '--json'],
+          { cwd: tempDir, timeoutMs: 30000 }
+        );
+        expect(result.exitCode).toBe(0);
+
+        const jsonData = JSON.parse(result.stdout);
+
+        expect(jsonData.lifecyclePoint).toBe('pre-archive');
+        expect(jsonData.changeName).toBeNull();
+        expect(Array.isArray(jsonData.hooks)).toBe(true);
+        expect(jsonData.hooks.length).toBe(1);
+        expect(jsonData.hooks[0].source).toBe('config');
+        expect(jsonData.hooks[0].instruction).toBe('Run pre-archive check');
+      }, 60000);
+
+      it('should show no hooks when none defined', async () => {
+        // Run instructions --hook without any config hooks
+        const result = await runCLI(['instructions', '--hook', 'pre-archive'], { cwd: tempDir, timeoutMs: 30000 });
+        expect(result.exitCode).toBe(0);
+
+        const output = getOutput(result);
+        expect(output).toContain('No hooks defined');
+      }, 60000);
+
+      it('should error on invalid lifecycle point', async () => {
+        // Run instructions --hook with invalid lifecycle point
+        const result = await runCLI(['instructions', '--hook', 'invalid-point'], { cwd: tempDir, timeoutMs: 30000 });
+        expect(result.exitCode).toBe(1);
+
+        const output = getOutput(result);
+        expect(output).toContain('Invalid lifecycle point');
+      }, 60000);
+
+      it('should error when --hook used with artifact argument', async () => {
+        // Run instructions with both artifact and --hook (mutual exclusivity)
+        const result = await runCLI(
+          ['instructions', 'proposal', '--hook', 'pre-archive'],
+          { cwd: tempDir, timeoutMs: 30000 }
+        );
+        expect(result.exitCode).toBe(1);
+
+        const output = getOutput(result);
+        expect(output).toContain('--hook cannot be used with an artifact argument');
+      }, 60000);
+
+      it('should error when --schema used with --hook', async () => {
+        const result = await runCLI(
+          ['instructions', '--hook', 'pre-archive', '--schema', 'spec-driven'],
+          { cwd: tempDir, timeoutMs: 30000 }
+        );
+        expect(result.exitCode).toBe(1);
+
+        const output = getOutput(result);
+        expect(output).toContain('--schema cannot be used with --hook');
+      }, 60000);
+
+      it.each(VALID_LIFECYCLE_POINTS)('should accept %s as a valid lifecycle point', async (point) => {
+        const result = await runCLI(
+          ['instructions', '--hook', point, '--json'],
+          { cwd: tempDir, timeoutMs: 30000 }
+        );
+        expect(result.exitCode).toBe(0);
+        const json = JSON.parse(result.stdout);
+        expect(json.lifecyclePoint).toBe(point);
+      }, 30000);
+
+      it('should return schema hooks before config hooks', async () => {
+        // Create a custom schema with hooks
+        const userDataDir = path.join(tempDir, 'user-data-hooks');
+        const schemaDir = path.join(userDataDir, 'openspec', 'schemas', 'hooked');
+        const templatesDir = path.join(schemaDir, 'templates');
+        await fs.mkdir(templatesDir, { recursive: true });
+
+        const schemaContent = `
+name: hooked
+version: 1
+description: Schema with hooks
+artifacts:
+  - id: proposal
+    generates: proposal.md
+    description: Proposal
+    template: proposal.md
+    requires: []
+hooks:
+  pre-archive:
+    instruction: "Schema hook: run pre-archive validation"
+`;
+        await fs.writeFile(path.join(schemaDir, 'schema.yaml'), schemaContent);
+        await fs.writeFile(path.join(templatesDir, 'proposal.md'), '# Proposal\n');
+
+        // Create config.yaml with hooks and schema reference
+        await fs.writeFile(
+          path.join(tempDir, 'openspec', 'config.yaml'),
+          `schema: hooked
+hooks:
+  pre-archive:
+    instruction: "Config hook: notify team"
+`
+        );
+
+        // Create a change using the hooked schema
+        const changeDir = await createTestChange('hooked-change');
+        await fs.writeFile(
+          path.join(changeDir, '.openspec.yaml'),
+          'schema: hooked\n'
+        );
+
+        // Run instructions --hook with --change and --json
+        const result = await runCLI(
+          ['instructions', '--hook', 'pre-archive', '--change', 'hooked-change', '--json'],
+          {
+            cwd: tempDir,
+            timeoutMs: 30000,
+            env: { XDG_DATA_HOME: userDataDir },
+          }
+        );
+        expect(result.exitCode).toBe(0);
+
+        const jsonData = JSON.parse(result.stdout);
+        expect(jsonData.hooks.length).toBe(2);
+        expect(jsonData.hooks[0].source).toBe('schema');
+        expect(jsonData.hooks[0].instruction).toContain('Schema hook');
+        expect(jsonData.hooks[1].source).toBe('config');
+        expect(jsonData.hooks[1].instruction).toContain('Config hook');
+      }, 60000);
+
+      it('should show hooks with --change flag', async () => {
+        // Create config.yaml with hooks
+        await fs.writeFile(
+          path.join(tempDir, 'openspec', 'config.yaml'),
+          `hooks:
+  pre-archive:
+    instruction: "Run pre-archive check"
+`
+        );
+
+        // Create a test change
+        await createTestChange('test-change');
+
+        // Run instructions --hook with --change flag
+        const result = await runCLI(
+          ['instructions', '--hook', 'pre-archive', '--change', 'test-change'],
+          { cwd: tempDir, timeoutMs: 30000 }
+        );
+        expect(result.exitCode).toBe(0);
+
+        const output = getOutput(result);
+        expect(output).toContain('Run pre-archive check');
+
+        // Also test JSON output to verify changeName
+        const jsonResult = await runCLI(
+          ['instructions', '--hook', 'pre-archive', '--change', 'test-change', '--json'],
+          { cwd: tempDir, timeoutMs: 30000 }
+        );
+        expect(jsonResult.exitCode).toBe(0);
+
+        const jsonData = JSON.parse(jsonResult.stdout);
+
+        expect(jsonData.lifecyclePoint).toBe('pre-archive');
+        expect(jsonData.changeName).toBe('test-change');
+        expect(Array.isArray(jsonData.hooks)).toBe(true);
+        expect(jsonData.hooks.length).toBeGreaterThan(0);
       }, 60000);
     });
   });

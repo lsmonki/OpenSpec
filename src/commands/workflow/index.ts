@@ -7,7 +7,7 @@
 export { statusCommand } from './status.js';
 export type { StatusOptions } from './status.js';
 
-export { instructionsCommand, applyInstructionsCommand } from './instructions.js';
+export { instructionsCommand, applyInstructionsCommand, contextInstructionsCommand } from './instructions.js';
 export type { InstructionsOptions } from './instructions.js';
 
 export { templatesCommand } from './templates.js';
@@ -18,5 +18,8 @@ export type { SchemasOptions } from './schemas.js';
 
 export { newChangeCommand } from './new-change.js';
 export type { NewChangeOptions } from './new-change.js';
+
+export { hooksCommand } from './hooks.js';
+export type { HooksOptions } from './hooks.js';
 
 export { DEFAULT_SCHEMA } from './shared.js';

@@ -1,11 +1,30 @@
 import ora from 'ora';
 import path from 'path';
-import { Validator } from '../core/validation/validator.js';
+import { promises as fs } from 'fs';
+import { Validator, SpecValidationConfig } from '../core/validation/validator.js';
 import { isInteractive, resolveNoInteractive } from '../utils/interactive.js';
-import { getActiveChangeIds, getSpecIds } from '../utils/item-discovery.js';
+import { getActiveChangeIds } from '../utils/item-discovery.js';
+import { findAllSpecs, validateSpecStructure, type ValidationIssue } from '../utils/spec-discovery.js';
+import { getSpecStructureConfig } from '../core/global-config.js';
+import { readProjectConfig } from '../core/project-config.js';
 import { nearestMatches } from '../utils/match.js';
+import { resolveSchema } from '../core/artifact-graph/resolver.js';
+import { resolveSpecArtifactFiles, type SpecArtifactFile } from '../core/artifact-graph/schema.js';
+import type { SchemaYaml } from '../core/artifact-graph/types.js';
+import { resolveSpecsPaths } from '../utils/specs-path.js';
 
 type ItemType = 'change' | 'spec';
+
+/**
+ * Get all spec capabilities using recursive spec discovery.
+ * Supports both flat and hierarchical spec structures.
+ */
+function getSpecCapabilities(): string[] {
+  const projectConfig = readProjectConfig(process.cwd());
+  const specsPaths = resolveSpecsPaths(process.cwd(), projectConfig?.specsPath);
+  const discovered = findAllSpecs(specsPaths.absolute);
+  return discovered.map(spec => spec.capability);
+}
 
 interface ExecuteOptions {
   all?: boolean;
@@ -25,6 +44,44 @@ interface BulkItemResult {
   valid: boolean;
   issues: { level: 'ERROR' | 'WARNING' | 'INFO'; path: string; message: string }[];
   durationMs: number;
+}
+
+/**
+ * Builds a SpecValidationConfig from a schema's configuration.
+ */
+function buildValidationConfig(schema: SchemaYaml): SpecValidationConfig {
+  const specsArtifact = schema.artifacts.find(a => a.id === 'specs');
+  const firstDelta = specsArtifact?.deltas?.[0];
+
+  return {
+    requiredSections: specsArtifact?.validations
+      ?.filter(v => v.required && !v.scope && !v.eachBlock)
+      .map(v => v.pattern.replace(/^## /, '')),
+    requirementSection: firstDelta?.section,
+    requirementPattern: firstDelta?.pattern,
+    deltaConfigs: specsArtifact?.deltas,
+    validationRules: specsArtifact?.validations,
+    changeScenarioPattern: schema.changeVerify?.scenarioPattern,
+    specArtifactFiles: resolveSpecArtifactFiles(schema),
+  };
+}
+
+/**
+ * Loads the project's schema and returns validation config.
+ * Returns undefined if no config or schema found (uses defaults).
+ */
+function loadProjectValidationConfig(projectRoot: string): SpecValidationConfig | undefined {
+  const config = readProjectConfig(projectRoot);
+  if (!config?.schema) return undefined;
+
+  try {
+    const schema = resolveSchema(config.schema, projectRoot);
+    return buildValidationConfig(schema);
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.warn(`Warning: Failed to load schema '${config.schema}': ${msg}. Using default validation config.`);
+    return undefined;
+  }
 }
 
 export class ValidateCommand {
@@ -80,7 +137,7 @@ export class ValidateCommand {
     if (choice === 'specs') return this.runBulkValidation({ changes: false, specs: true }, opts);
 
     // one
-    const [changes, specs] = await Promise.all([getActiveChangeIds(), getSpecIds()]);
+    const [changes, specs] = [await getActiveChangeIds(), getSpecCapabilities()];
     const items: { name: string; value: { type: ItemType; id: string } }[] = [];
     items.push(...changes.map(id => ({ name: `change/${id}`, value: { type: 'change' as const, id } })));
     items.push(...specs.map(id => ({ name: `spec/${id}`, value: { type: 'spec' as const, id } })));
@@ -103,45 +160,49 @@ export class ValidateCommand {
   }
 
   private async validateDirectItem(itemName: string, opts: { typeOverride?: ItemType; strict: boolean; json: boolean }): Promise<void> {
-    const [changes, specs] = await Promise.all([getActiveChangeIds(), getSpecIds()]);
-    const isChange = changes.includes(itemName);
-    const isSpec = specs.includes(itemName);
+    // Normalize path separators to native so CLI input matches discovered IDs on any platform
+    const normalizedName = itemName.replace(/[/\\]/g, path.sep);
+    const [changes, specs] = [await getActiveChangeIds(), getSpecCapabilities()];
+    const isChange = changes.includes(normalizedName);
+    const isSpec = specs.includes(normalizedName);
 
     const type = opts.typeOverride ?? (isChange ? 'change' : isSpec ? 'spec' : undefined);
 
     if (!type) {
-      console.error(`Unknown item '${itemName}'`);
-      const suggestions = nearestMatches(itemName, [...changes, ...specs]);
+      console.error(`Unknown item '${normalizedName}'`);
+      const suggestions = nearestMatches(normalizedName, [...changes, ...specs]);
       if (suggestions.length) console.error(`Did you mean: ${suggestions.join(', ')}?`);
       process.exitCode = 1;
       return;
     }
 
     if (!opts.typeOverride && isChange && isSpec) {
-      console.error(`Ambiguous item '${itemName}' matches both a change and a spec.`);
+      console.error(`Ambiguous item '${normalizedName}' matches both a change and a spec.`);
       console.error('Pass --type change|spec, or use: openspec change validate / openspec spec validate');
       process.exitCode = 1;
       return;
     }
 
-    await this.validateByType(type, itemName, opts);
+    await this.validateByType(type, normalizedName, opts);
   }
 
   private async validateByType(type: ItemType, id: string, opts: { strict: boolean; json: boolean }): Promise<void> {
     const validator = new Validator(opts.strict);
+    const projectRoot = process.cwd();
+    const validationConfig = loadProjectValidationConfig(projectRoot);
+
     if (type === 'change') {
-      const changeDir = path.join(process.cwd(), 'openspec', 'changes', id);
+      const changeDir = path.join(projectRoot, 'openspec', 'changes', id);
       const start = Date.now();
-      const report = await validator.validateChangeDeltaSpecs(changeDir);
+      const report = await validator.validateChangeDeltaSpecs(changeDir, validationConfig);
       const durationMs = Date.now() - start;
       this.printReport('change', id, report, durationMs, opts.json);
       // Non-zero exit if invalid (keeps enriched output test semantics)
       process.exitCode = report.valid ? 0 : 1;
       return;
     }
-    const file = path.join(process.cwd(), 'openspec', 'specs', id, 'spec.md');
     const start = Date.now();
-    const report = await validator.validateSpec(file);
+    const report = await this.validateSpecArtifacts(validator, projectRoot, id, validationConfig);
     const durationMs = Date.now() - start;
     this.printReport('spec', id, report, durationMs, opts.json);
     process.exitCode = report.valid ? 0 : 1;
@@ -181,24 +242,100 @@ export class ValidateCommand {
     bullets.forEach(b => console.error(`  ${b}`));
   }
 
+  /**
+   * Validate all artifact files for a spec (not just spec.md).
+   * Delta-bearing artifacts are validated structurally; non-delta artifacts are checked for existence.
+   */
+  private async validateSpecArtifacts(
+    validator: Validator,
+    projectRoot: string,
+    specId: string,
+    config?: SpecValidationConfig
+  ): Promise<{ valid: boolean; issues: Array<{ level: 'ERROR' | 'WARNING' | 'INFO'; path: string; message: string }> }> {
+    const defaultDeltas = [{ section: 'Requirements', pattern: '### Requirement: {name}' }];
+    const defaultValidations = [
+      { pattern: '## Purpose', required: true },
+      { pattern: '## Requirements', required: true },
+      { pattern: '### Requirement: {name}', required: true, scope: 'Requirements' },
+      { pattern: '#### Scenario: {name}', required: true, eachBlock: 'Requirements' },
+      { pattern: 'SHALL|MUST', required: true, eachBlock: 'Requirements' },
+    ];
+    const artifactFiles: SpecArtifactFile[] = config?.specArtifactFiles ?? [
+      { filename: 'spec.md', deltas: defaultDeltas, validations: defaultValidations },
+    ];
+    const allIssues: Array<{ level: 'ERROR' | 'WARNING' | 'INFO'; path: string; message: string }> = [];
+    let allValid = true;
+
+    const projectConfig = readProjectConfig(projectRoot);
+    const specsPaths = resolveSpecsPaths(projectRoot, projectConfig?.specsPath);
+
+    for (const af of artifactFiles) {
+      const file = path.join(specsPaths.absolute, specId, af.filename);
+
+      if (af.deltas?.length) {
+        // Delta-bearing artifact: validate as spec with per-artifact config
+        const fileConfig: SpecValidationConfig = {
+          ...config,
+          requiredSections: af.validations
+            ?.filter(v => v.required && !v.scope && !v.eachBlock)
+            .map(v => v.pattern.replace(/^## /, '')),
+          requirementSection: af.deltas[0].section,
+          requirementPattern: af.deltas[0].pattern,
+          deltaConfigs: af.deltas,
+          validationRules: af.validations,
+        };
+        const report = await validator.validateSpec(file, fileConfig);
+        if (!report.valid) allValid = false;
+        allIssues.push(...report.issues);
+      } else {
+        // Non-delta artifact: check existence
+        try {
+          await fs.access(file);
+        } catch {
+          allValid = false;
+          allIssues.push({
+            level: 'ERROR' as const,
+            path: `${specId}/${af.filename}`,
+            message: `Required artifact file "${af.filename}" not found`,
+          });
+        }
+      }
+    }
+
+    return { valid: allValid, issues: allIssues };
+  }
+
   private async runBulkValidation(scope: { changes: boolean; specs: boolean }, opts: { strict: boolean; json: boolean; concurrency?: string; noInteractive?: boolean }): Promise<void> {
     const spinner = !opts.json && !opts.noInteractive ? ora('Validating...').start() : undefined;
-    const [changeIds, specIds] = await Promise.all([
-      scope.changes ? getActiveChangeIds() : Promise.resolve<string[]>([]),
-      scope.specs ? getSpecIds() : Promise.resolve<string[]>([]),
-    ]);
+    const projectRoot = process.cwd();
+
+    // Discover specs once and reuse for both capability list and structure validation
+    const bulkProjectConfig = readProjectConfig(projectRoot);
+    const bulkSpecsPaths = resolveSpecsPaths(projectRoot, bulkProjectConfig?.specsPath);
+    const discoveredSpecs = scope.specs ? findAllSpecs(bulkSpecsPaths.absolute) : [];
+    const specIds = discoveredSpecs.map(s => s.capability);
+
+    const changeIds = scope.changes ? await getActiveChangeIds() : [];
+
+    // Perform spec structure validation if validating specs
+    let structureIssues: ValidationIssue[] = [];
+    if (scope.specs && discoveredSpecs.length > 0) {
+      const projectConfig = readProjectConfig(projectRoot);
+      const config = getSpecStructureConfig(projectConfig?.specStructure);
+      structureIssues = validateSpecStructure(discoveredSpecs, config);
+    }
 
     const DEFAULT_CONCURRENCY = 6;
-    const maxSuggestions = 5; // used by nearestMatches
     const concurrency = normalizeConcurrency(opts.concurrency) ?? normalizeConcurrency(process.env.OPENSPEC_CONCURRENCY) ?? DEFAULT_CONCURRENCY;
     const validator = new Validator(opts.strict);
+    const validationConfig = loadProjectValidationConfig(projectRoot);
     const queue: Array<() => Promise<BulkItemResult>> = [];
 
     for (const id of changeIds) {
       queue.push(async () => {
         const start = Date.now();
-        const changeDir = path.join(process.cwd(), 'openspec', 'changes', id);
-        const report = await validator.validateChangeDeltaSpecs(changeDir);
+        const changeDir = path.join(projectRoot, 'openspec', 'changes', id);
+        const report = await validator.validateChangeDeltaSpecs(changeDir, validationConfig);
         const durationMs = Date.now() - start;
         return { id, type: 'change' as const, valid: report.valid, issues: report.issues, durationMs };
       });
@@ -206,8 +343,7 @@ export class ValidateCommand {
     for (const id of specIds) {
       queue.push(async () => {
         const start = Date.now();
-        const file = path.join(process.cwd(), 'openspec', 'specs', id, 'spec.md');
-        const report = await validator.validateSpec(file);
+        const report = await this.validateSpecArtifacts(validator, projectRoot, id, validationConfig);
         const durationMs = Date.now() - start;
         return { id, type: 'spec' as const, valid: report.valid, issues: report.issues, durationMs };
       });
@@ -271,6 +407,8 @@ export class ValidateCommand {
 
     spinner?.stop();
 
+    const hasStructureIssues = structureIssues.length > 0;
+
     results.sort((a, b) => a.id.localeCompare(b.id));
     const summary = {
       totals: { items: results.length, passed, failed },
@@ -280,10 +418,29 @@ export class ValidateCommand {
       },
     } as const;
 
+    // Structure validation as a separate concern (not a phantom item)
+    const structureValidation = hasStructureIssues
+      ? {
+          valid: false,
+          issues: structureIssues.map(issue => ({
+            level: issue.level,
+            capability: issue.capability || undefined,
+            message: issue.message
+          })),
+        }
+      : { valid: true, issues: [] as { level: string; capability?: string; message: string }[] };
+
     if (opts.json) {
-      const out = { items: results, summary, version: '1.0' };
+      const out = { items: results, structureValidation, summary, version: '1.0' };
       console.log(JSON.stringify(out, null, 2));
     } else {
+      if (hasStructureIssues) {
+        console.error('Structure validation:');
+        for (const issue of structureIssues) {
+          const prefix = issue.level === 'ERROR' ? '✗' : '⚠';
+          console.error(`  ${prefix} ${issue.message}`);
+        }
+      }
       for (const res of results) {
         if (res.valid) console.log(`✓ ${res.type}/${res.id}`);
         else console.error(`✗ ${res.type}/${res.id}`);
@@ -291,7 +448,7 @@ export class ValidateCommand {
       console.log(`Totals: ${summary.totals.passed} passed, ${summary.totals.failed} failed (${summary.totals.items} items)`);
     }
 
-    process.exitCode = failed > 0 ? 1 : 0;
+    process.exitCode = (failed > 0 || hasStructureIssues) ? 1 : 0;
   }
 }
 

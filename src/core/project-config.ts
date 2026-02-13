@@ -2,6 +2,8 @@ import { existsSync, readFileSync, statSync } from 'fs';
 import path from 'path';
 import { parse as parseYaml } from 'yaml';
 import { z } from 'zod';
+import type { SpecStructureConfig } from '../utils/spec-discovery.js';
+import { VALID_LIFECYCLE_POINTS } from './artifact-graph/types.js';
 
 /**
  * Zod schema for project configuration.
@@ -23,6 +25,20 @@ export const ProjectConfigSchema = z.object({
     .min(1)
     .describe('The workflow schema to use (e.g., "spec-driven")'),
 
+  // Optional: path to specs directory, relative to project root
+  specsPath: z
+    .string()
+    .min(1)
+    .optional()
+    .describe('Path to specs directory, relative to project root. Default: openspec/specs'),
+
+  // Optional: allow specsPath to point outside the project root
+  allowExternalPaths: z
+    .boolean()
+    .optional()
+    .default(false)
+    .describe('Allow specsPath to point outside project root. Default: false'),
+
   // Optional: project context (injected into all artifact instructions)
   // Max size: 50KB (enforced during parsing)
   context: z
@@ -38,6 +54,26 @@ export const ProjectConfigSchema = z.object({
     )
     .optional()
     .describe('Per-artifact rules, keyed by artifact ID'),
+
+  // Optional: spec structure configuration (overrides global config)
+  specStructure: z
+    .object({
+      structure: z.enum(['flat', 'hierarchical', 'auto']).optional(),
+      maxDepth: z.number().int().min(1).max(10).optional(),
+      allowMixed: z.boolean().optional(),
+      validatePaths: z.boolean().optional(),
+    })
+    .optional()
+    .describe('Spec structure configuration (overrides global config)'),
+
+  // Optional: lifecycle hooks (LLM instructions at operation boundaries)
+  hooks: z
+    .record(
+      z.string(), // lifecycle point (e.g., "post-archive")
+      z.object({ instruction: z.string().min(1) })
+    )
+    .optional()
+    .describe('Lifecycle hooks keyed by lifecycle point'),
 });
 
 export type ProjectConfig = z.infer<typeof ProjectConfigSchema>;
@@ -91,6 +127,28 @@ export function readProjectConfig(projectRoot: string): ProjectConfig | null {
       config.schema = schemaResult.data;
     } else if (raw.schema !== undefined) {
       console.warn(`Invalid 'schema' field in config (must be non-empty string)`);
+    }
+
+    // Parse specsPath field using Zod
+    if (raw.specsPath !== undefined) {
+      const specsPathField = z.string().min(1);
+      const specsPathResult = specsPathField.safeParse(raw.specsPath);
+      if (specsPathResult.success) {
+        config.specsPath = specsPathResult.data;
+      } else {
+        console.warn(`Invalid 'specsPath' field in config (must be non-empty string)`);
+      }
+    }
+
+    // Parse allowExternalPaths field using Zod
+    if (raw.allowExternalPaths !== undefined) {
+      const allowExternalField = z.boolean();
+      const allowExternalResult = allowExternalField.safeParse(raw.allowExternalPaths);
+      if (allowExternalResult.success) {
+        config.allowExternalPaths = allowExternalResult.data;
+      } else {
+        console.warn(`Invalid 'allowExternalPaths' field in config (must be boolean)`);
+      }
     }
 
     // Parse context field with size limit
@@ -149,6 +207,98 @@ export function readProjectConfig(projectRoot: string): ProjectConfig | null {
         }
       } else {
         console.warn(`Invalid 'rules' field in config (must be object)`);
+      }
+    }
+
+    // Parse specStructure field sub-field-by-field (resilient)
+    if (raw.specStructure !== undefined) {
+      if (typeof raw.specStructure === 'object' && raw.specStructure !== null && !Array.isArray(raw.specStructure)) {
+        const parsedSpecStructure: SpecStructureConfig = {};
+        let hasValidFields = false;
+
+        // structure
+        if (raw.specStructure.structure !== undefined) {
+          const result = z.enum(['flat', 'hierarchical', 'auto']).safeParse(raw.specStructure.structure);
+          if (result.success) {
+            parsedSpecStructure.structure = result.data;
+            hasValidFields = true;
+          } else {
+            console.warn(`Invalid 'specStructure.structure' in config (must be 'flat', 'hierarchical', or 'auto')`);
+          }
+        }
+
+        // maxDepth
+        if (raw.specStructure.maxDepth !== undefined) {
+          const result = z.number().int().min(1).max(10).safeParse(raw.specStructure.maxDepth);
+          if (result.success) {
+            parsedSpecStructure.maxDepth = result.data;
+            hasValidFields = true;
+          } else {
+            console.warn(`Invalid 'specStructure.maxDepth' in config (must be integer 1-10)`);
+          }
+        }
+
+        // allowMixed
+        if (raw.specStructure.allowMixed !== undefined) {
+          const result = z.boolean().safeParse(raw.specStructure.allowMixed);
+          if (result.success) {
+            parsedSpecStructure.allowMixed = result.data;
+            hasValidFields = true;
+          } else {
+            console.warn(`Invalid 'specStructure.allowMixed' in config (must be boolean)`);
+          }
+        }
+
+        // validatePaths
+        if (raw.specStructure.validatePaths !== undefined) {
+          const result = z.boolean().safeParse(raw.specStructure.validatePaths);
+          if (result.success) {
+            parsedSpecStructure.validatePaths = result.data;
+            hasValidFields = true;
+          } else {
+            console.warn(`Invalid 'specStructure.validatePaths' in config (must be boolean)`);
+          }
+        }
+
+        if (hasValidFields) {
+          config.specStructure = parsedSpecStructure;
+        }
+      } else {
+        console.warn(`Invalid 'specStructure' field in config (must be object)`);
+      }
+    }
+
+    // Parse hooks field
+    if (raw.hooks !== undefined) {
+      if (typeof raw.hooks === 'object' && raw.hooks !== null && !Array.isArray(raw.hooks)) {
+        const parsedHooks: Record<string, { instruction: string }> = {};
+        let hasValidHooks = false;
+        const validPoints = new Set<string>(VALID_LIFECYCLE_POINTS);
+        const hookSchema = z.object({ instruction: z.string().min(1) });
+
+        for (const [point, hook] of Object.entries(raw.hooks)) {
+          // Warn on unrecognized lifecycle points
+          if (!validPoints.has(point)) {
+            console.warn(`Unknown lifecycle point in hooks: "${point}". Valid points: ${VALID_LIFECYCLE_POINTS.join(', ')}`);
+            continue;
+          }
+
+          const hookResult = hookSchema.safeParse(hook);
+          if (hookResult.success) {
+            parsedHooks[point] = hookResult.data;
+            hasValidHooks = true;
+          } else {
+            console.warn(
+              `Invalid hook for '${point}': instruction must be a non-empty string, ignoring`
+            );
+          }
+        }
+
+        if (hasValidHooks) {
+          config.hooks = parsedHooks;
+        }
+      } else {
+        console.warn(`Invalid 'hooks' field in config (must be object)`);
       }
     }
 

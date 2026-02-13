@@ -248,6 +248,64 @@ rules:
         });
       });
 
+      it('should parse allowExternalPaths as true', () => {
+        const configDir = path.join(tempDir, 'openspec');
+        fs.mkdirSync(configDir, { recursive: true });
+        fs.writeFileSync(
+          path.join(configDir, 'config.yaml'),
+          `schema: spec-driven\nallowExternalPaths: true\n`
+        );
+
+        const config = readProjectConfig(tempDir);
+
+        expect(config?.allowExternalPaths).toBe(true);
+        expect(consoleWarnSpy).not.toHaveBeenCalled();
+      });
+
+      it('should parse allowExternalPaths as false', () => {
+        const configDir = path.join(tempDir, 'openspec');
+        fs.mkdirSync(configDir, { recursive: true });
+        fs.writeFileSync(
+          path.join(configDir, 'config.yaml'),
+          `schema: spec-driven\nallowExternalPaths: false\n`
+        );
+
+        const config = readProjectConfig(tempDir);
+
+        expect(config?.allowExternalPaths).toBe(false);
+        expect(consoleWarnSpy).not.toHaveBeenCalled();
+      });
+
+      it('should default allowExternalPaths to undefined when not present', () => {
+        const configDir = path.join(tempDir, 'openspec');
+        fs.mkdirSync(configDir, { recursive: true });
+        fs.writeFileSync(
+          path.join(configDir, 'config.yaml'),
+          `schema: spec-driven\n`
+        );
+
+        const config = readProjectConfig(tempDir);
+
+        expect(config?.allowExternalPaths).toBeUndefined();
+        expect(consoleWarnSpy).not.toHaveBeenCalled();
+      });
+
+      it('should warn when allowExternalPaths has invalid type', () => {
+        const configDir = path.join(tempDir, 'openspec');
+        fs.mkdirSync(configDir, { recursive: true });
+        fs.writeFileSync(
+          path.join(configDir, 'config.yaml'),
+          `schema: spec-driven\nallowExternalPaths: "yes"\n`
+        );
+
+        const config = readProjectConfig(tempDir);
+
+        expect(config?.allowExternalPaths).toBeUndefined();
+        expect(consoleWarnSpy).toHaveBeenCalledWith(
+          expect.stringContaining("Invalid 'allowExternalPaths' field")
+        );
+      });
+
       it('should handle completely invalid YAML gracefully', () => {
         const configDir = path.join(tempDir, 'openspec');
         fs.mkdirSync(configDir, { recursive: true });
@@ -478,6 +536,384 @@ rules:
           'Reference @mentions and #channels',
           'Follow {variable} naming',
         ]);
+      });
+    });
+
+    describe('specStructure parsing', () => {
+      it('should parse valid complete specStructure', () => {
+        const configDir = path.join(tempDir, 'openspec');
+        fs.mkdirSync(configDir, { recursive: true });
+        fs.writeFileSync(
+          path.join(configDir, 'config.yaml'),
+          `schema: spec-driven
+specStructure:
+  structure: hierarchical
+  maxDepth: 3
+  allowMixed: false
+  validatePaths: true
+`
+        );
+
+        const config = readProjectConfig(tempDir);
+
+        expect(config?.specStructure).toEqual({
+          structure: 'hierarchical',
+          maxDepth: 3,
+          allowMixed: false,
+          validatePaths: true,
+        });
+        expect(consoleWarnSpy).not.toHaveBeenCalled();
+      });
+
+      it('should parse partial specStructure (only some fields)', () => {
+        const configDir = path.join(tempDir, 'openspec');
+        fs.mkdirSync(configDir, { recursive: true });
+        fs.writeFileSync(
+          path.join(configDir, 'config.yaml'),
+          `schema: spec-driven
+specStructure:
+  structure: flat
+`
+        );
+
+        const config = readProjectConfig(tempDir);
+
+        expect(config?.specStructure).toEqual({
+          structure: 'flat',
+        });
+        expect(consoleWarnSpy).not.toHaveBeenCalled();
+      });
+
+      it('should keep valid sub-fields and warn about invalid ones', () => {
+        const configDir = path.join(tempDir, 'openspec');
+        fs.mkdirSync(configDir, { recursive: true });
+        fs.writeFileSync(
+          path.join(configDir, 'config.yaml'),
+          `schema: spec-driven
+specStructure:
+  structure: flat
+  maxDepth: "invalid"
+  validatePaths: false
+`
+        );
+
+        const config = readProjectConfig(tempDir);
+
+        expect(config?.specStructure).toEqual({
+          structure: 'flat',
+          validatePaths: false,
+        });
+        expect(consoleWarnSpy).toHaveBeenCalledWith(
+          expect.stringContaining("Invalid 'specStructure.maxDepth'")
+        );
+      });
+
+      it('should warn about invalid structure enum value', () => {
+        const configDir = path.join(tempDir, 'openspec');
+        fs.mkdirSync(configDir, { recursive: true });
+        fs.writeFileSync(
+          path.join(configDir, 'config.yaml'),
+          `schema: spec-driven
+specStructure:
+  structure: nested
+  maxDepth: 3
+`
+        );
+
+        const config = readProjectConfig(tempDir);
+
+        expect(config?.specStructure).toEqual({
+          maxDepth: 3,
+        });
+        expect(consoleWarnSpy).toHaveBeenCalledWith(
+          expect.stringContaining("Invalid 'specStructure.structure'")
+        );
+      });
+
+      it('should warn about invalid boolean sub-fields', () => {
+        const configDir = path.join(tempDir, 'openspec');
+        fs.mkdirSync(configDir, { recursive: true });
+        fs.writeFileSync(
+          path.join(configDir, 'config.yaml'),
+          `schema: spec-driven
+specStructure:
+  allowMixed: "yes"
+  validatePaths: 42
+`
+        );
+
+        const config = readProjectConfig(tempDir);
+
+        // No valid fields, so specStructure should not be set
+        expect(config?.specStructure).toBeUndefined();
+        expect(consoleWarnSpy).toHaveBeenCalledWith(
+          expect.stringContaining("Invalid 'specStructure.allowMixed'")
+        );
+        expect(consoleWarnSpy).toHaveBeenCalledWith(
+          expect.stringContaining("Invalid 'specStructure.validatePaths'")
+        );
+      });
+
+      it('should return undefined specStructure when field is absent', () => {
+        const configDir = path.join(tempDir, 'openspec');
+        fs.mkdirSync(configDir, { recursive: true });
+        fs.writeFileSync(
+          path.join(configDir, 'config.yaml'),
+          `schema: spec-driven
+`
+        );
+
+        const config = readProjectConfig(tempDir);
+
+        expect(config?.specStructure).toBeUndefined();
+        expect(consoleWarnSpy).not.toHaveBeenCalled();
+      });
+
+      it('should warn when specStructure is not an object', () => {
+        const configDir = path.join(tempDir, 'openspec');
+        fs.mkdirSync(configDir, { recursive: true });
+        fs.writeFileSync(
+          path.join(configDir, 'config.yaml'),
+          `schema: spec-driven
+specStructure: 42
+`
+        );
+
+        const config = readProjectConfig(tempDir);
+
+        expect(config?.specStructure).toBeUndefined();
+        expect(consoleWarnSpy).toHaveBeenCalledWith(
+          expect.stringContaining("Invalid 'specStructure' field in config (must be object)")
+        );
+      });
+
+      it('should ignore unknown sub-fields without warning', () => {
+        const configDir = path.join(tempDir, 'openspec');
+        fs.mkdirSync(configDir, { recursive: true });
+        fs.writeFileSync(
+          path.join(configDir, 'config.yaml'),
+          `schema: spec-driven
+specStructure:
+  structure: flat
+  unknownField: true
+  anotherUnknown: 42
+`
+        );
+
+        const config = readProjectConfig(tempDir);
+
+        expect(config?.specStructure).toEqual({
+          structure: 'flat',
+        });
+        expect(consoleWarnSpy).not.toHaveBeenCalled();
+      });
+
+      it('should handle specStructure: null without aborting config parsing', () => {
+        const configDir = path.join(tempDir, 'openspec');
+        fs.mkdirSync(configDir, { recursive: true });
+        fs.writeFileSync(
+          path.join(configDir, 'config.yaml'),
+          `schema: spec-driven
+specStructure:
+`
+        );
+
+        const config = readProjectConfig(tempDir);
+
+        expect(config?.schema).toBe('spec-driven');
+        expect(config?.specStructure).toBeUndefined();
+        expect(consoleWarnSpy).toHaveBeenCalledWith(
+          expect.stringContaining("Invalid 'specStructure' field in config (must be object)")
+        );
+      });
+
+      it('should reject maxDepth below valid range', () => {
+        const configDir = path.join(tempDir, 'openspec');
+        fs.mkdirSync(configDir, { recursive: true });
+        fs.writeFileSync(
+          path.join(configDir, 'config.yaml'),
+          `schema: spec-driven
+specStructure:
+  maxDepth: 0
+`
+        );
+
+        const config = readProjectConfig(tempDir);
+
+        expect(config?.specStructure).toBeUndefined();
+        expect(consoleWarnSpy).toHaveBeenCalledWith(
+          expect.stringContaining("Invalid 'specStructure.maxDepth'")
+        );
+      });
+
+      it('should reject maxDepth above valid range', () => {
+        const configDir = path.join(tempDir, 'openspec');
+        fs.mkdirSync(configDir, { recursive: true });
+        fs.writeFileSync(
+          path.join(configDir, 'config.yaml'),
+          `schema: spec-driven
+specStructure:
+  maxDepth: 11
+`
+        );
+
+        const config = readProjectConfig(tempDir);
+
+        expect(config?.specStructure).toBeUndefined();
+        expect(consoleWarnSpy).toHaveBeenCalledWith(
+          expect.stringContaining("Invalid 'specStructure.maxDepth'")
+        );
+      });
+    });
+
+    describe('hooks parsing', () => {
+      it('should parse valid hooks', () => {
+        const configDir = path.join(tempDir, 'openspec');
+        fs.mkdirSync(configDir, { recursive: true });
+        fs.writeFileSync(
+          path.join(configDir, 'config.yaml'),
+          `schema: spec-driven
+hooks:
+  pre-archive:
+    instruction: "Run cleanup"
+  post-archive:
+    instruction: "Notify team"
+`
+        );
+
+        const config = readProjectConfig(tempDir);
+
+        expect(config).toEqual({
+          schema: 'spec-driven',
+          hooks: {
+            'pre-archive': { instruction: 'Run cleanup' },
+            'post-archive': { instruction: 'Notify team' },
+          },
+        });
+        expect(consoleWarnSpy).not.toHaveBeenCalled();
+      });
+
+      it('should ignore hooks with unknown lifecycle points', () => {
+        const configDir = path.join(tempDir, 'openspec');
+        fs.mkdirSync(configDir, { recursive: true });
+        fs.writeFileSync(
+          path.join(configDir, 'config.yaml'),
+          `schema: spec-driven
+hooks:
+  invalid-point:
+    instruction: "something"
+  pre-archive:
+    instruction: "valid"
+`
+        );
+
+        const config = readProjectConfig(tempDir);
+
+        expect(config).toEqual({
+          schema: 'spec-driven',
+          hooks: {
+            'pre-archive': { instruction: 'valid' },
+          },
+        });
+        expect(consoleWarnSpy).toHaveBeenCalledWith(
+          expect.stringContaining('Unknown lifecycle point')
+        );
+      });
+
+      it('should skip hooks with empty instruction', () => {
+        const configDir = path.join(tempDir, 'openspec');
+        fs.mkdirSync(configDir, { recursive: true });
+        fs.writeFileSync(
+          path.join(configDir, 'config.yaml'),
+          `schema: spec-driven
+hooks:
+  pre-archive:
+    instruction: ""
+`
+        );
+
+        const config = readProjectConfig(tempDir);
+
+        expect(config).toEqual({
+          schema: 'spec-driven',
+        });
+        expect(consoleWarnSpy).toHaveBeenCalledWith(
+          expect.stringContaining('instruction must be a non-empty string')
+        );
+      });
+
+      it('should handle hooks that is not an object', () => {
+        const configDir = path.join(tempDir, 'openspec');
+        fs.mkdirSync(configDir, { recursive: true });
+        fs.writeFileSync(
+          path.join(configDir, 'config.yaml'),
+          `schema: spec-driven
+hooks: "not an object"
+`
+        );
+
+        const config = readProjectConfig(tempDir);
+
+        expect(config).toEqual({
+          schema: 'spec-driven',
+        });
+        expect(consoleWarnSpy).toHaveBeenCalledWith(
+          expect.stringContaining('Invalid')
+        );
+      });
+
+      it('should parse config with hooks alongside other fields', () => {
+        const configDir = path.join(tempDir, 'openspec');
+        fs.mkdirSync(configDir, { recursive: true });
+        fs.writeFileSync(
+          path.join(configDir, 'config.yaml'),
+          `schema: spec-driven
+context: "Project context here"
+rules:
+  proposal:
+    - Valid rule one
+    - Valid rule two
+hooks:
+  pre-sync:
+    instruction: "Backup data"
+  post-apply:
+    instruction: "Deploy changes"
+`
+        );
+
+        const config = readProjectConfig(tempDir);
+
+        expect(config).toEqual({
+          schema: 'spec-driven',
+          context: 'Project context here',
+          rules: {
+            proposal: ['Valid rule one', 'Valid rule two'],
+          },
+          hooks: {
+            'pre-sync': { instruction: 'Backup data' },
+            'post-apply': { instruction: 'Deploy changes' },
+          },
+        });
+        expect(consoleWarnSpy).not.toHaveBeenCalled();
+      });
+
+      it('should handle hooks: null gracefully', () => {
+        const configDir = path.join(tempDir, 'openspec');
+        fs.mkdirSync(configDir, { recursive: true });
+        fs.writeFileSync(
+          path.join(configDir, 'config.yaml'),
+          `schema: spec-driven
+context: "Valid context"
+hooks:
+`
+        );
+
+        const config = readProjectConfig(tempDir);
+
+        expect(config).toEqual({
+          schema: 'spec-driven',
+          context: 'Valid context',
+        });
       });
     });
   });

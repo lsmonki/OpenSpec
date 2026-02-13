@@ -458,7 +458,7 @@ Next: Create design using /opsx:continue
 
 ### `openspec instructions`
 
-Get enriched instructions for creating an artifact or applying tasks. Used by AI agents to understand what to create next.
+Get enriched instructions for creating an artifact, applying tasks, retrieving lifecycle hooks, or getting project context. Used by AI agents to understand what to do next.
 
 ```
 openspec instructions [artifact] [options]
@@ -474,34 +474,87 @@ openspec instructions [artifact] [options]
 
 | Option | Description |
 |--------|-------------|
-| `--change <id>` | Change name (required in non-interactive mode) |
+| `--change <id>` | Change name (required for artifact mode; optional for hook mode) |
 | `--schema <name>` | Schema override |
+| `--hook <lifecycle-point>` | Retrieve lifecycle hooks for a given point (mutually exclusive with `[artifact]`) |
+| `--context` | Output project context from `config.yaml` (incompatible with `--change`, `--schema`, artifact) |
 | `--json` | Output as JSON |
 
-**Special case:** Use `apply` as the artifact to get task implementation instructions.
+This command has three modes:
+
+**Artifact mode** (`openspec instructions <artifact> --change <name>`): Returns instructions for creating a specific artifact, including template, dependencies, and project context.
+
+**Apply mode** (`openspec instructions apply --change <name>`): Returns task implementation instructions with progress tracking and context files.
+
+**Hook mode** (`openspec instructions --hook <lifecycle-point> [--change <name>]`): Returns lifecycle hooks for a given point. With `--change`, resolves hooks from the change's schema and project config. Without `--change`, resolves from `config.yaml`'s default schema and config. The `--hook` flag is mutually exclusive with the `[artifact]` positional argument and with `--context` — using `--hook` with either produces an error.
+
+Valid lifecycle points: `pre-explore`, `post-explore`, `pre-new`, `post-new`, `pre-continue`, `post-continue`, `pre-ff`, `post-ff`, `pre-apply`, `post-apply`, `pre-verify`, `post-verify`, `pre-sync`, `post-sync`, `pre-archive`, `post-archive`, `pre-bulk-archive`, `post-bulk-archive`, `pre-onboard`, `post-onboard`. Note: `pre-continue`/`post-continue` hooks also fire for each artifact iteration inside the `ff` skill, and `pre-archive`/`post-archive` hooks fire for each individual change inside `bulk-archive`.
+
+**Modes:**
+
+This command operates in four modes:
+
+1. **Artifact instructions** (default): Get instructions for creating a specific artifact
+2. **Apply instructions** (`apply` argument): Get task implementation instructions with progress tracking
+3. **Hook mode** (`--hook` flag): Retrieve lifecycle hooks for a given point
+4. **Context-only** (`--context` flag): Return just the project context from `config.yaml`
+
+The `--context` flag is exclusive — it cannot be combined with `--change`, `--schema`, `--hook`, or an artifact argument. Similarly, `--hook` cannot be combined with `--context` or an artifact argument.
 
 **Examples:**
 
 ```bash
-# Get instructions for next artifact
-openspec instructions --change add-dark-mode
-
 # Get specific artifact instructions
 openspec instructions design --change add-dark-mode
 
 # Get apply/implementation instructions
 openspec instructions apply --change add-dark-mode
 
+# Get lifecycle hooks for a point (with change context)
+openspec instructions --hook pre-archive --change add-dark-mode --json
+
+# Get lifecycle hooks (project-wide, no change context)
+openspec instructions --hook post-new --json
+
 # JSON for agent consumption
 openspec instructions design --change add-dark-mode --json
+
+# Get project context (text)
+openspec instructions --context
+
+# Get project context (JSON)
+openspec instructions --context --json
 ```
 
-**Output includes:**
+**Hook output (JSON):**
+
+```json
+{
+  "lifecyclePoint": "pre-archive",
+  "changeName": "add-dark-mode",
+  "hooks": [
+    { "source": "schema", "instruction": "Generate ADR entries..." },
+    { "source": "config", "instruction": "Notify Slack channel..." }
+  ]
+}
+```
+
+**Artifact output includes:**
 
 - Template content for the artifact
-- Project context from config
+- Project context from `config.yaml`
 - Content from dependency artifacts
-- Per-artifact rules from config
+- Per-artifact rules from `config.yaml`
+
+**Context-only output (JSON):**
+
+```json
+{
+  "context": "This is a TypeScript CLI tool that runs on Node.js 18+..."
+}
+```
+
+If no `config.yaml` exists or it has no `context` field, returns `{"context": null}` in JSON mode or no output in text mode.
 
 ---
 

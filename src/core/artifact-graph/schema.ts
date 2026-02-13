@@ -1,6 +1,46 @@
 import * as fs from 'node:fs';
 import { parse as parseYaml } from 'yaml';
-import { SchemaYamlSchema, type SchemaYaml, type Artifact } from './types.js';
+import {
+  SchemaYamlSchema,
+  ChangeVerifySchema,
+  type SchemaYaml,
+  type Artifact,
+} from './types.js';
+
+export interface SpecArtifactFile {
+  filename: string;
+  deltas?: Array<{ section: string; pattern: string }>;
+  validations?: Array<{ pattern: string; required: boolean; scope?: string; eachBlock?: string }>;
+}
+
+/**
+ * Resolves an artifact's output filename from `generates` (last concrete segment) or `template` (fallback).
+ */
+export function resolveArtifactFilename(artifact: Artifact): string {
+  const lastSegment = artifact.generates.split('/').pop() ?? artifact.template;
+  if (/[*?]/.test(lastSegment)) {
+    return artifact.template;
+  }
+  return lastSegment;
+}
+
+/**
+ * Resolves `requiredSpecArtifacts` IDs to a list of `{ filename, deltas }` objects.
+ */
+export function resolveSpecArtifactFiles(schema: SchemaYaml): SpecArtifactFile[] {
+  const ids = schema.requiredSpecArtifacts ?? ['specs'];
+  return ids.map(id => {
+    const artifact = schema.artifacts.find(a => a.id === id);
+    if (!artifact) {
+      return { filename: `${id}.md` };
+    }
+    return {
+      filename: resolveArtifactFilename(artifact),
+      deltas: artifact.deltas,
+      validations: artifact.validations,
+    };
+  });
+}
 
 export class SchemaValidationError extends Error {
   constructor(message: string) {
@@ -41,7 +81,81 @@ export function parseSchema(yamlContent: string): SchemaYaml {
   // Check for cycles
   validateNoCycles(schema.artifacts);
 
-  return schema;
+  // Validate pattern placeholders
+  validatePatternPlaceholders(schema);
+
+  // Apply defaults for validation config and artifact sections
+  return applySchemaDefaults(schema);
+}
+
+/**
+ * Validates that all pattern strings contain the {name} placeholder.
+ */
+function validatePatternPlaceholders(schema: SchemaYaml): void {
+  // Check changeVerify patterns
+  if (schema.changeVerify?.requirementPattern !== undefined && !schema.changeVerify.requirementPattern.includes('{name}')) {
+    throw new SchemaValidationError(
+      `changeVerify.requirementPattern must include {name} placeholder, got: "${schema.changeVerify.requirementPattern}"`
+    );
+  }
+  if (schema.changeVerify?.scenarioPattern !== undefined && !schema.changeVerify.scenarioPattern.includes('{name}')) {
+    throw new SchemaValidationError(
+      `changeVerify.scenarioPattern must include {name} placeholder, got: "${schema.changeVerify.scenarioPattern}"`
+    );
+  }
+
+  // Check artifact deltas[].pattern
+  for (const artifact of schema.artifacts) {
+    if (artifact.deltas) {
+      for (const delta of artifact.deltas) {
+        if (!delta.pattern.includes('{name}')) {
+          throw new SchemaValidationError(
+            `Artifact '${artifact.id}' deltas[].pattern must include {name} placeholder, got: "${delta.pattern}"`
+          );
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Applies default values for validation config and artifact sections.
+ * Zod handles most defaults, but we need to apply defaults for the specs artifact
+ * when sections are not explicitly configured.
+ */
+function applySchemaDefaults(schema: SchemaYaml): SchemaYaml {
+  // Apply defaults for changeVerify using Zod's default parsing
+  const changeVerify = schema.changeVerify
+    ? ChangeVerifySchema.parse(schema.changeVerify)
+    : ChangeVerifySchema.parse({});
+
+  // Apply default for requiredSpecArtifacts
+  const requiredSpecArtifacts = schema.requiredSpecArtifacts ?? ['specs'];
+
+  // Apply defaults for specs artifact deltas/validations if not specified
+  const artifacts = schema.artifacts.map(artifact => {
+    if (artifact.id === 'specs') {
+      const deltas = artifact.deltas ?? [
+        { section: 'Requirements', pattern: '### Requirement: {name}' },
+      ];
+      const validations = artifact.validations ?? [
+        { pattern: '## Purpose', required: true },
+        { pattern: '## Requirements', required: true },
+        { pattern: '### Requirement: {name}', required: true, scope: 'Requirements' },
+        { pattern: '#### Scenario: {name}', required: true, eachBlock: 'Requirements' },
+        { pattern: 'SHALL|MUST', required: true, eachBlock: 'Requirements' },
+      ];
+      return { ...artifact, deltas, validations };
+    }
+    return artifact;
+  });
+
+  return {
+    ...schema,
+    changeVerify,
+    requiredSpecArtifacts,
+    artifacts,
+  };
 }
 
 /**

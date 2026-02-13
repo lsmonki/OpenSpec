@@ -1,5 +1,56 @@
 # @fission-ai/openspec
 
+## Unreleased
+
+### Minor Changes
+
+- **Hierarchical spec structures** — OpenSpec now supports organizing specifications in nested directory hierarchies (e.g., `_global/testing/`, `platform/services/api/`) alongside the traditional flat structure. Auto-detects structure, maintains full backward compatibility, and includes comprehensive migration guide.
+
+  **Features:**
+  - Recursive spec discovery with `findAllSpecs()` utility
+  - Auto-detection of flat vs. hierarchical structures
+  - Structure validation with configurable depth limits and naming conventions
+  - 1:1 delta replication (change deltas mirror main spec structure)
+  - Cross-platform path handling (Windows, macOS, Linux)
+  - Configuration via `specStructure` in global and project config
+
+  **Updated commands:**
+  - `list`, `validate`, `sync`, `archive` - all support hierarchical paths
+  - Change parser and validator use recursive discovery
+
+  **Documentation:**
+  - [Organizing Specs Guide](docs/organizing-specs.md)
+  - [Migration Guide](docs/migration-flat-to-hierarchical.md)
+  - [Troubleshooting](docs/troubleshooting-hierarchical-specs.md)
+  - [Example project](examples/hierarchical-specs/)
+
+### Features
+
+- **Configurable specs directory** — New `specsPath` option in `openspec/config.yaml` allows projects to store archived specifications in a custom location instead of the default `openspec/specs/`. Useful for projects that prefer `specs/` or `docs/specifications/` at the repository root.
+
+  ```yaml
+  # openspec/config.yaml
+  specsPath: specs  # or docs/specifications, etc.
+  ```
+
+  After changing `specsPath`, run `openspec update` to regenerate skill files with the new path.
+
+- **`{{specsPath}}` placeholder for custom schemas** — Schema authors can use `{{specsPath}}` in instructions and templates to reference the project's configured specs directory. This ensures custom schemas work correctly regardless of where specs are stored.
+
+- **Configurable spec formats** — Schemas can now define custom requirement patterns, section headers, scenario formats, and normative keyword validation. New schema fields:
+  - `changeVerify`: Schema-level change verification config (`artifact`, `requirementPattern`, `scenarioPattern`)
+  - `requiredSpecArtifacts`: Required artifact files in each spec folder (default: `['specs']`)
+  - `deltas[]`: Per-artifact delta merge config (supports multiple sections, e.g., Requirements + Constraints)
+  - `validations[]`: Per-artifact structural validation rules with three granularity levels (file-level, scope, eachBlock) — single source of truth for scenarios, normative keywords, etc.
+- **`openspec schema show` command** — Inspect the parsed configuration of any schema, including resolved `specArtifactFiles`, `changeVerify`, artifact definitions, and apply config. Name is optional (defaults to project schema). Omits `instruction` fields by default to save tokens; use `--full` to include them.
+- **Schema-aware skill templates** — Skill prompts no longer hardcode `spec.md`. They use `openspec schema show --json` to discover schema configuration and `specArtifactFiles`, enabling multi-file spec workflows (e.g., `spec.md` + `verify.md` per capability).
+
+### Improvements
+
+- **Cross-platform path support** — The `specsPath` config accepts both forward slashes (`/`) and backslashes (`\`), automatically normalizing for the current operating system.
+
+- **Legacy path auto-replacement** — Custom schemas with hardcoded `openspec/specs` paths are automatically updated to use the configured `specsPath`, with a warning encouraging migration to the `{{specsPath}}` placeholder.
+
 ## 1.1.1
 
 ### Patch Changes

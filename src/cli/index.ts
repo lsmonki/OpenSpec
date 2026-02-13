@@ -20,15 +20,18 @@ import {
   statusCommand,
   instructionsCommand,
   applyInstructionsCommand,
+  contextInstructionsCommand,
   templatesCommand,
   schemasCommand,
   newChangeCommand,
+  hooksCommand,
   DEFAULT_SCHEMA,
   type StatusOptions,
   type InstructionsOptions,
   type TemplatesOptions,
   type SchemasOptions,
   type NewChangeOptions,
+  type HooksOptions,
 } from '../commands/workflow/index.js';
 import { maybeShowTelemetryNotice, trackCommand, shutdown } from '../telemetry/index.js';
 
@@ -437,14 +440,45 @@ program
 // Instructions command
 program
   .command('instructions [artifact]')
-  .description('Output enriched instructions for creating an artifact or applying tasks')
+  .description('Output enriched instructions for creating an artifact, applying tasks, retrieving lifecycle hooks, or getting project context')
   .option('--change <id>', 'Change name')
   .option('--schema <name>', 'Schema override (auto-detected from config.yaml)')
+  .option('--hook <lifecycle-point>', 'Retrieve lifecycle hooks for a given point (mutually exclusive with [artifact])')
+  .option('--context', 'Output project context from config.yaml (incompatible with --change, --schema, artifact)')
   .option('--json', 'Output as JSON')
   .action(async (artifactId: string | undefined, options: InstructionsOptions) => {
     try {
-      // Special case: "apply" is not an artifact, but a command to get apply instructions
-      if (artifactId === 'apply') {
+      // Mutual exclusivity: --hook cannot be used with an artifact argument
+      if (options.hook && artifactId) {
+        throw new Error('--hook cannot be used with an artifact argument');
+      }
+
+      // Mutual exclusivity: --hook and --context cannot be used together
+      if (options.hook && options.context) {
+        throw new Error('--hook cannot be combined with --context');
+      }
+
+      if (options.hook) {
+        // --schema is not supported in hook mode
+        if (options.schema) {
+          throw new Error('--schema cannot be used with --hook');
+        }
+        // Hook mode: delegate to hooksCommand
+        await hooksCommand(options.hook, { change: options.change, json: options.json });
+      } else if (options.context) {
+        // Validate exclusivity: --context is incompatible with other options
+        if (artifactId) {
+          throw new Error('--context cannot be combined with an artifact argument');
+        }
+        if (options.change) {
+          throw new Error('--context cannot be combined with --change');
+        }
+        if (options.schema) {
+          throw new Error('--context cannot be combined with --schema');
+        }
+        await contextInstructionsCommand({ json: options.json });
+      } else if (artifactId === 'apply') {
+        // Special case: "apply" is not an artifact, but a command to get apply instructions
         await applyInstructionsCommand(options);
       } else {
         await instructionsCommand(artifactId, options);

@@ -1,13 +1,19 @@
 import { program } from 'commander';
-import { existsSync, readdirSync, readFileSync } from 'fs';
+import { existsSync, readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { MarkdownParser } from '../core/parsers/markdown-parser.js';
 import { Validator } from '../core/validation/validator.js';
 import type { Spec } from '../core/schemas/index.js';
 import { isInteractive } from '../utils/interactive.js';
 import { getSpecIds } from '../utils/item-discovery.js';
+import { findAllSpecs } from '../utils/spec-discovery.js';
+import { resolveSpecsPaths } from '../utils/specs-path.js';
+import { readProjectConfig } from '../core/project-config.js';
 
-const SPECS_DIR = 'openspec/specs';
+function getSpecsDir(): string {
+  const config = readProjectConfig(process.cwd());
+  return resolveSpecsPaths(process.cwd(), config?.specsPath).absolute;
+}
 
 interface ShowOptions {
   json?: boolean;
@@ -56,17 +62,29 @@ function filterSpec(spec: Spec, options: ShowOptions): Spec {
 }
 
 /**
- * Print the raw markdown content for a spec file without any formatting.
- * Raw-first behavior ensures text mode is a passthrough for deterministic output.
+ * Print all markdown files in a spec folder.
+ * Shows spec.md first, then other files alphabetically.
  */
-function printSpecTextRaw(specPath: string): void {
-  const content = readFileSync(specPath, 'utf-8');
-  console.log(content);
+function printSpecFolderRaw(specDir: string): void {
+  const entries = readdirSync(specDir, { withFileTypes: true })
+    .filter(e => e.isFile() && e.name.endsWith('.md'))
+    .map(e => e.name)
+    .sort((a, b) => {
+      // spec.md first, then alphabetical
+      if (a === 'spec.md') return -1;
+      if (b === 'spec.md') return 1;
+      return a.localeCompare(b);
+    });
+
+  for (let i = 0; i < entries.length; i++) {
+    if (i > 0) console.log(`\n---\n`);
+    if (entries.length > 1) console.log(`<!-- ${entries[i]} -->`);
+    const content = readFileSync(join(specDir, entries[i]), 'utf-8');
+    console.log(content);
+  }
 }
 
 export class SpecCommand {
-  private SPECS_DIR = 'openspec/specs';
-
   async show(specId?: string, options: ShowOptions = {}): Promise<void> {
     if (!specId) {
       const canPrompt = isInteractive(options);
@@ -82,9 +100,10 @@ export class SpecCommand {
       }
     }
 
-    const specPath = join(this.SPECS_DIR, specId, 'spec.md');
+    const specsDir = getSpecsDir();
+    const specPath = join(specsDir, specId, 'spec.md');
     if (!existsSync(specPath)) {
-      throw new Error(`Spec '${specId}' not found at openspec/specs/${specId}/spec.md`);
+      throw new Error(`Spec '${specId}' not found at ${specsDir}/${specId}/spec.md`);
     }
 
     if (options.json) {
@@ -104,7 +123,7 @@ export class SpecCommand {
       console.log(JSON.stringify(output, null, 2));
       return;
     }
-    printSpecTextRaw(specPath);
+    printSpecFolderRaw(join(specsDir, specId));
   }
 }
 
@@ -143,35 +162,33 @@ export function registerSpecCommand(rootProgram: typeof program) {
     .option('--long', 'Show id and title with counts')
     .action((options: { json?: boolean; long?: boolean }) => {
       try {
-        if (!existsSync(SPECS_DIR)) {
+        const specsDir = getSpecsDir();
+        if (!existsSync(specsDir)) {
           console.log('No items found');
           return;
         }
 
-        const specs = readdirSync(SPECS_DIR, { withFileTypes: true })
-          .filter(dirent => dirent.isDirectory())
-          .map(dirent => {
-            const specPath = join(SPECS_DIR, dirent.name, 'spec.md');
-            if (existsSync(specPath)) {
-              try {
-                const spec = parseSpecFromFile(specPath, dirent.name);
-                
-                return {
-                  id: dirent.name,
-                  title: spec.name,
-                  requirementCount: spec.requirements.length
-                };
-              } catch {
-                return {
-                  id: dirent.name,
-                  title: dirent.name,
-                  requirementCount: 0
-                };
-              }
+        // Use spec-discovery utility to find all specs (supports hierarchical)
+        const discoveredSpecs = findAllSpecs(specsDir);
+
+        const specs = discoveredSpecs
+          .map(discoveredSpec => {
+            try {
+              const spec = parseSpecFromFile(discoveredSpec.path, discoveredSpec.capability);
+
+              return {
+                id: discoveredSpec.capability,
+                title: spec.name,
+                requirementCount: spec.requirements.length
+              };
+            } catch {
+              return {
+                id: discoveredSpec.capability,
+                title: discoveredSpec.capability,
+                requirementCount: 0
+              };
             }
-            return null;
           })
-          .filter((spec): spec is { id: string; title: string; requirementCount: number } => spec !== null)
           .sort((a, b) => a.id.localeCompare(b.id));
 
         if (options.json) {
@@ -217,10 +234,11 @@ export function registerSpecCommand(rootProgram: typeof program) {
           }
         }
 
-        const specPath = join(SPECS_DIR, specId, 'spec.md');
-        
+        const specsDir = getSpecsDir();
+        const specPath = join(specsDir, specId, 'spec.md');
+
         if (!existsSync(specPath)) {
-          throw new Error(`Spec '${specId}' not found at openspec/specs/${specId}/spec.md`);
+          throw new Error(`Spec '${specId}' not found at ${specsDir}/${specId}/spec.md`);
         }
 
         const validator = new Validator(options.strict);
